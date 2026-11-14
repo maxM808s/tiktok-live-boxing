@@ -29,4 +29,5 @@ let single=initial('single');single=patch(single,startMatch(single,1000));single
 single=patch(single,startMatch(single,2000));assert.equal(single.blueScore,0);assert.equal(single.round,1);
 const reset=resetMatch(s);assert.equal(reset.mode,'endless');assert.equal(reset.phase,'ready');assert.equal(reset.round,1);assert.equal(reset.blueScore,0);assert.equal(reset.redScore,0);
 assert.equal(healthWinner({blueHp:90,redHp:90}),'draw');
+const recovered=tickMatch({...initial('endless'),phase:'finished',winner:'draw',blueScore:0},1000);assert.equal(recovered.phase,'intermission');assert.equal(recovered.nextRoundAt,1000+ROUND_BREAK_MS);
 console.log('PASS: endless KO/time wins, exactly-once scoring, draws, automatic restart/reload, precise pause/resume, best-of series, single-round behavior and full reset.');

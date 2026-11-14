@@ -40,6 +40,7 @@ export function pauseMatch(s,now=Date.now()){
  return {...settled,phase:'paused',remainingMs,remaining:Math.ceil(remainingMs/1000),endsAt:0,nextRoundAt:0};
 }
 export function tickMatch(s,now=Date.now()){
+ if(s.mode==='endless'&&s.phase==='finished')return {phase:'intermission',seriesWinner:null,endsAt:0,nextRoundAt:now+ROUND_BREAK_MS};
  if(s.phase==='running'&&now>=s.endsAt)return settleRound(s,healthWinner(s),now);
  if(s.phase==='intermission'&&now>=s.nextRoundAt)return freshRound(s,now,s.round+1);
  return null;

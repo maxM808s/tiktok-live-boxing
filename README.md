@@ -14,7 +14,7 @@ The Windows launcher retains its one-click workflow, Python detection and local 
 
 ## Game modes and round scores
 
-Choose **Match setup → Game mode**, set the round length (15–300 seconds), and press **Save settings** before **Start match**.
+Choose **Match setup → Game mode**, set the round length (15–300 seconds), and press **Start match**. Mode selection applies immediately; save changes to the other settings.
 
 | Mode | Behavior |
 | --- | --- |
@@ -29,7 +29,7 @@ The dashboard and 9:16 overlay show the current round and both fighters' cumulat
 
 **Pause** freezes an active round's remaining time without changing health or scores, or stops automatic progression between rounds. **Resume match** continues the paused round, or starts the next round if the previous round was already settled. **Reset** stops the match and clears round/point totals while keeping the selected mode, fighters and gift assignments. **New match** starts a finished match over at round 1 with zero points. Mode selection is locked during a running/paused match; reset before choosing a different mode.
 
-Gifts affect health **only while a round is running**. Gifts during a pause or the 3-second result display are ignored, not queued for the next round. Native replay identities are still consumed so those events cannot be replayed later. Keep one dashboard open: it owns deadlines and automatic round transitions. If it is reloaded during the result display, it starts one fresh round when ready rather than awarding fictional results for elapsed time. Saving a different duration during play changes the next fresh round; it does not change the current round's deadline.
+Gifts affect health **only while a round is running**. Gifts during a pause or the 3-second result display are ignored, not queued for the next round. Native replay identities are still consumed so those events cannot be replayed later. The local Python server owns deadlines and automatic transitions, including while the dashboard is backgrounded or frozen. Keep one dashboard open to receive TikFinity gifts. Wins show the winner and ties show a tie, then automatic modes start a fresh round after three seconds. Saving a different duration during play changes the next fresh round; it does not change the current round's deadline.
 
 ## Gift library and assignments
 
@@ -85,9 +85,9 @@ The developer bridge remains available under **Normalized test bridge (advanced)
 
 ## Live Studio and synchronization
 
-Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Otherwise open the overlay in a separate browser window and capture that window. Keep the dashboard private.
+Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Press **Open separate game window** in the dashboard. On Windows, Edge or Chrome opens a dedicated app window with a separate capture profile and fullscreen launch flags. Select **Boxing Arena — Game Capture** in LIVE Studio Window Capture; the dashboard stays in its own browser window. If the app browser is unavailable, a separate popup opens (allow popups). Press **F** or the auto-hiding fullscreen button to toggle fullscreen. Keep the dashboard private.
 
-`server.py` uses Python's standard library and binds only to `127.0.0.1`. It serves only allowlisted game files and rejects malformed state and cross-site writes; local applications remain trusted. The dashboard publishes state; overlays poll about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it owns the round timer. Loopback sources cannot be reached from another computer.
+`server.py` uses Python's standard library and binds only to `127.0.0.1`. It serves only allowlisted game files and rejects malformed state and cross-site writes; local applications remain trusted. The dashboard sends commands; the server validates them and advances the match clock independently. Dashboards and overlays poll canonical state about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it receives TikFinity gifts. Loopback sources cannot be reached from another computer.
 
 For isolated development only, static hosting (`python -m http.server 8766`) retains same-profile BroadcastChannel/localStorage synchronization. Separate browser sources require `server.py`; the static fallback does not provide the hardened server's file restrictions or security headers. Isolated Chromium profile synchronization was tested; Windows launcher execution, actual Live Studio capture and streaming performance still need testing on your PC.
 
@@ -117,3 +117,5 @@ The security review and remaining limitations are documented in [SECURITY.md](SE
 Appearance/layout regression: run `node tests/appearance.mjs` against the static development fixture and dedicated Chromium debug profile. It checks direct healing selection, exclusive assignment, Hebrew/English placement updates, persistence and external overlay synchronization, and writes screenshots for both positions under `/tmp`.
 
 Mode tests: `node tests/match.mjs` covers deterministic round/series transitions and exact pause time. For the full hardened-server mode test, start `python server.py --port 8769` and run `node tests/modes-browser.mjs` with the dedicated Chromium debug profile. It exercises KO/time wins, automatic restarts, draws, reload-safe points, pause/resume, series champions and overlay score synchronization, and writes screenshots under `/tmp`.
+
+Regression: `python tests/server_clock.py` verifies browser-independent timing and Windows app-launch arguments. With the server on port 8770 and Chromium debugging on 9222, `node tests/tie-capture.mjs` exercises repeated ties with a frozen dashboard, win points, separate capture-window identity, fullscreen control wiring, and restored synchronization. Windows launch arguments are mocked in automated tests; verify the actual Windows app window on your PC.

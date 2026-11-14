@@ -7,6 +7,8 @@ import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+from match_server import clock_tick, command
+from capture_window import launch_capture_window
 
 ROOT = Path(__file__).resolve().parent
 CATALOG = {g['id']: g for g in json.loads((ROOT / 'catalog.json').read_text(encoding='utf-8'))}
@@ -110,6 +112,13 @@ class ArenaHandler(SimpleHTTPRequestHandler):
     sys_version = ''
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, '.mjs': 'text/javascript', '.js': 'text/javascript', '.webp': 'image/webp'}
 
+    @classmethod
+    def advance(cls, now=None):
+        now = int(time.time() * 1000) if now is None else now
+        next_state = clock_tick(cls.state, now)
+        if next_state is not None:
+            cls.state = validate_state(next_state)
+
     def setup(self):
         super().setup()
         self.connection.settimeout(5)
@@ -164,8 +173,9 @@ class ArenaHandler(SimpleHTTPRequestHandler):
         path = unquote(parsed.path)
         if path == '/api/state':
             with self.lock:
+                type(self).advance()
                 snapshot = type(self).state
-            self.reply(200, {'protocol': 'boxing-arena-v1', 'state': snapshot})
+            self.reply(200, {'protocol': 'boxing-arena-v1', 'clock': 'server', 'state': snapshot})
             return
         name = 'index.html' if path == '/' else (path[1:] if path.startswith('/') else path)
         if name not in PUBLIC_FILES or path not in ('/', '/' + name):
@@ -190,7 +200,7 @@ class ArenaHandler(SimpleHTTPRequestHandler):
         if not self.allowed(write=True):
             self.reply(403, {'error': 'Local same-origin JSON requests only'})
             return
-        if self.path != '/api/state':
+        if self.path not in ('/api/state', '/api/command', '/api/capture-window'):
             self.reply(404, {'error': 'Unknown endpoint'})
             return
         if len(self.headers.get_all('Content-Type', [])) != 1 or self.headers.get_content_type() != 'application/json':
@@ -207,23 +217,62 @@ class ArenaHandler(SimpleHTTPRequestHandler):
             raw = self.rfile.read(length)
             if len(raw) != length:
                 raise ValueError('Incomplete body')
-            state = validate_state(json.loads(raw, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite number'))))
+            data = json.loads(raw, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Non-finite number')))
+            if self.path == '/api/capture-window':
+                if data != {}:
+                    raise ValueError('Capture accepts no arguments')
+                try:
+                    opened = launch_capture_window(self.server.server_port)
+                except OSError:
+                    opened = False
+                self.reply(200 if opened else 501, {'opened': opened, 'kind': 'app' if opened else 'popup'})
+                return
+            state = validate_state(data) if self.path == '/api/state' else None
             with self.lock:
+                type(self).advance()
                 current = type(self).state
+                if self.path == '/api/command':
+                    type(self).state = validate_state(command(current, data, int(time.time() * 1000), CATALOG))
+                    self.reply(200, {'ok': True, 'clock': 'server', 'state': type(self).state})
+                    return
                 if current and state['revision'] <= current['revision']:
                     self.reply(409, {'error': 'Stale state'})
                     return
+                if current and self.headers.get('X-Boxing-Revision') != str(current['revision']):
+                    self.reply(409, {'error': 'State changed; reload current state', 'clock': 'server', 'state': current})
+                    return
                 type(self).state = state
-            self.reply(200, {'ok': True})
+            self.reply(200, {'ok': True, 'clock': 'server', 'state': state})
         except (ValueError, TypeError, UnicodeDecodeError, RecursionError, OverflowError):
             self.reply(400, {'error': 'Invalid state'})
         except socket.timeout:
             self.reply(408, {'error': 'Request timed out'})
 
 
+class ArenaHTTPServer(ThreadingHTTPServer):
+    def serve_forever(self, poll_interval=0.1):
+        stopped = threading.Event()
+        def run_clock():
+            while not stopped.wait(0.05):
+                with self.RequestHandlerClass.lock:
+                    self.RequestHandlerClass.advance()
+        clock = threading.Thread(target=run_clock, daemon=True, name='boxing-match-clock')
+        clock.start()
+        try:
+            super().serve_forever(poll_interval)
+        finally:
+            stopped.set()
+            clock.join(timeout=1)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8766)
+    parser.add_argument('--open-dashboard', action='store_true')
     args = parser.parse_args()
     print(f'Boxing Arena: http://127.0.0.1:{args.port}/index.html', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', args.port), ArenaHandler).serve_forever()
+    server = ArenaHTTPServer(('127.0.0.1', args.port), ArenaHandler)
+    if args.open_dashboard:
+        import webbrowser
+        threading.Thread(target=lambda: webbrowser.open(f'http://127.0.0.1:{args.port}/index.html'), daemon=True).start()
+    server.serve_forever()

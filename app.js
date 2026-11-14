@@ -7,7 +7,8 @@ if(!catalogResponse.ok)throw Error("Gift library could not load. Restart Start-B
 const giftCatalog=await catalogResponse.json(),giftRules=createGiftRules(giftCatalog);
 let refreshGiftControls=()=>{};
 let refreshBridge=()=>{},refreshStats=()=>{},publishState=()=>{};
-const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת מסך השידור 9:16","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור TikFinity","התחברות","מצב הדגמה · אין חיבור לשידור חי","יש לפתוח את TikFinity Desktop באותו מחשב ולחבר לשידור. חיבור השקע לבדו אינו מאמת קבלת אירועים חיים.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
+let serverClock=false,clockReady=false,sendCommand=null;
+const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת חלון משחק נפרד","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור TikFinity","התחברות","מצב הדגמה · אין חיבור לשידור חי","יש לפתוח את TikFinity Desktop באותו מחשב ולחבר לשידור. חיבור השקע לבדו אינו מאמת קבלת אירועים חיים.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
 const originalLabels={};
 
 const KEY="boxing-arena-v1";
@@ -33,7 +34,9 @@ function read(){try{
 let state=read();
 let giftDraft=giftRules.validate(state);
 const channel=typeof BroadcastChannel!=="undefined"?new BroadcastChannel(KEY):null;
-function commit(patch){state=normalizeState({...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)});try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
+function commit(patch,command){
+ if(serverClock&&sendCommand){const keys=["mode","language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","blueAttackGifts","redAttackGifts","blueHealGift","redHealGift"];sendCommand(command||{type:"settings",patch:Object.fromEntries(keys.filter(key=>Object.hasOwn(patch,key)).map(key=>[key,patch[key]]))});return}
+ state=normalizeState({...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)});try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
 function sync(next){try{const verified=normalizeState(next);if(verified.revision>=state.revision){state=verified;localize();renderControls()}}catch{log(state.language==="he"?"מצב סנכרון לא תקין נדחה":"Invalid synchronized state rejected")}}
 channel&&(channel.onmessage=e=>sync(e.data));
 window.addEventListener("storage",e=>{if(e.key===KEY)sync(read())});
@@ -52,20 +55,22 @@ function action(side,power,type="gift",details={}){
  log((state.language==="he"?(side==="blue"?"כחול":"אדום"):side)+" · "+(details.name||"gift")+" · "+power+(state.language==="he"?" מטבעות":" coins")+" ("+(healing?"+":"−")+amount+" HP)");
 }
 function applyGift(giftId,count=1){
+ if(serverClock&&sendCommand){sendCommand({type:"gift",giftId:String(giftId),count});return}
  const event=giftRules.resolve(giftId,count,state);
  if(!event){log(state.language==="he"?"מתנה ללא שיוך התעלמה: "+giftId:"Unassigned/unknown gift ignored: "+giftId);return}
  action(event.side,event.power,event.type,event);
 }
-function start(){const patch=startMatch(state);if(!patch)return;commit(patch);log(state.language==="he"?"הסיבוב התחיל":"Round started")}
-function reset(){commit(resetMatch(state));log(state.language==="he"?"המשחק והניקוד אופסו":"Match and scores reset")}
+function start(){const patch=startMatch(state);if(!patch)return;commit(patch,{type:"start"});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
+function reset(){commit(resetMatch(state),{type:"reset"});log(state.language==="he"?"המשחק והניקוד אופסו":"Match and scores reset")}
 function finish(){const patch=settleRound(state,healthWinner(state));if(!patch)return;commit(patch);log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[patch.winner]):"Round finished: "+patch.winner)}
-function pause(){const patch=pauseMatch(state);if(patch){commit(patch);log(state.language==="he"?(patch.phase==="finished"?"המשחק הסתיים":"המשחק הושהה"):(patch.phase==="finished"?"Match finished":"Match paused"))}}
+function pause(){const patch=pauseMatch(state);if(patch){commit(patch,{type:"pause"});log(state.language==="he"?(patch.phase==="finished"?"המשחק הסתיים":"המשחק הושהה"):(patch.phase==="finished"?"Match finished":"Match paused"))}}
 function modeName(mode){return (state.language==="he"?{single:"סיבוב בודד",endless:"סיבובים אינסופיים",best3:"הטוב מ־3",best5:"הטוב מ־5"}:{single:"Single round",endless:"Endless rounds",best3:"Best of 3",best5:"Best of 5"})[mode]}
 function renderControls(){if(!$("save"))return;localize();refreshStats();refreshGiftControls();document.querySelectorAll("[data-test-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=["running","intermission"].includes(state.phase);$("pause").disabled=!["running","intermission"].includes(state.phase);$("matchMode").disabled=["running","intermission","paused"].includes(state.phase);
 $("start").querySelector("span").textContent=state.language==="he"?(state.phase==="paused"?"המשך משחק":state.phase==="finished"?"משחק חדש":"התחלת משחק"):(state.phase==="paused"?"Resume match":state.phase==="finished"?"New match":"Start match");const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
 if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","matchMode"]){$(field).value=field==="matchMode"?state.mode:state[field];}
 $("save").onclick=()=>{const patch={...giftRules.validate(giftDraft),giftInfoPosition:$("giftInfoPosition").value};for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();if(!safePortraitURL(patch.blueImage)||!safePortraitURL(patch.redImage)){log(state.language==="he"?"יש להזין כתובת תמונה תקינה מסוג HTTP(S), ללא פרטי כניסה":"Use valid HTTP(S) portrait URLs without embedded credentials");return}patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(["ready","finished"].includes(state.phase)){patch.remaining=patch.duration;patch.remainingMs=patch.duration*1000;const mode=$("matchMode").value;if(mode!==state.mode)Object.assign(patch,resetMatch({...state,...patch,mode}))}$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
 $("start").onclick=start;$("reset").onclick=reset;$("pause").onclick=pause;
+$("matchMode").onchange=()=>{if(!["ready","finished"].includes(state.phase)){$("matchMode").value=state.mode;return}commit(resetMatch({...state,mode:$("matchMode").value}));log(state.language==="he"?"מצב המשחק נשמר":"Game mode applied")};
 document.querySelectorAll("[data-test-gift]").forEach(b=>b.onclick=()=>{
  const id=$(b.dataset.testGift+"TestGift").value;if(id)applyGift(id);
 });
@@ -119,6 +124,14 @@ $("language").addEventListener("change",()=>queueMicrotask(()=>bridgeStatus(ws?.
 if($("preset")){
 $("language").addEventListener("change",()=>{commit({language:$("language").value})});
 $("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log(state.language==="he"?"הקרב נבחר — לחצו על שמירת הגדרות כדי להחיל":"Preset selected — click Save settings to apply")};
+$("openCapture").onclick=async event=>{
+ event.preventDefault();const url=new URL("./overlay.html?capture=1",location.href).href;
+ try{const response=await fetch("./api/capture-window",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:"{}",signal:AbortSignal.timeout(2000)});if(response.ok&&(await response.json()).opened){log(state.language==="he"?"חלון משחק נפרד נפתח. ב־LIVE Studio בחרו לכידת חלון":"Separate game window opened. Select Game Capture in LIVE Studio Window Capture");return}}catch{}
+ const height=Math.min(screen.availHeight||960,960),width=Math.round(height*9/16);
+ const view=window.open(url,"boxing-game-capture","popup=yes,width="+width+",height="+height+",menubar=no,toolbar=no,location=no,resizable=yes,scrollbars=no");
+ if(view){view.opener=null;view.focus();log(state.language==="he"?"חלון משחק נפרד נפתח; לחצו F למסך מלא":"Separate capture window opened; press F for fullscreen")}
+ else log(state.language==="he"?"הדפדפן חסם את החלון. אפשרו חלונות קופצים לאתר המקומי":"Allow popups for this local site to open the separate capture window");
+};
 $("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").querySelector("span").textContent=state.language==="he"?"✓ הועתק":"✓ Copied";setTimeout(()=>localize(),1800)}catch{window.prompt("Copy overlay URL:",url)}};
 function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.phase==="intermission"?Math.max(0,Math.ceil((state.nextRoundAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",intermission:"בין סיבובים",paused:"מושהה",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+(state.language==="he"?" שנ׳":"s");$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("roundStat").textContent=(state.language==="he"?"סיבוב ":"Round ")+state.round;$("modeStat").textContent=modeName(state.mode);$("blueScore").textContent=state.blueScore;$("redScore").textContent=state.redScore;$("blueScoreName").textContent=fighterName("blue");$("redScoreName").textContent=fighterName("red");$("blueCoinsStat").textContent=(state.language==="he"?"מטבעות לכחול: ":"Blue gift coins: ")+state.blueCoins;$("redCoinsStat").textContent=(state.language==="he"?"מטבעות לאדום: ":"Red gift coins: ")+state.redCoins}
 refreshStats=stats;setInterval(stats,150);stats();
@@ -130,7 +143,7 @@ const hebrew=state.language==="he";
 document.querySelectorAll("[data-tab-en]").forEach(el=>el.textContent=hebrew?el.dataset.tabHe:el.dataset.tabEn);
 document.documentElement.lang=hebrew?"he":"en";
 document.documentElement.dir=hebrew?"rtl":"ltr";
-const arena=$("arena");if(arena){arena.setAttribute("aria-label",state.blueName+": "+state.blueHp+" · "+state.redName+": "+state.redHp);arena.dataset.giftInfoPosition=state.giftInfoPosition;arena.dataset.round=state.round;arena.dataset.blueScore=state.blueScore;arena.dataset.redScore=state.redScore;arena.dataset.phase=state.phase;arena.setAttribute("aria-description",hebrew?"תוויות אגרוף וריפוי "+(state.giftInfoPosition==="aboveNames"?"מעל שמות המתמודדים":"בתחתית המסך"):"Punch and healing gifts "+(state.giftInfoPosition==="aboveNames"?"above fighter names":"at the bottom"))}
+const arena=$("arena");if(arena){arena.setAttribute("aria-label",state.blueName+": "+state.blueHp+" · "+state.redName+": "+state.redHp);arena.dataset.giftInfoPosition=state.giftInfoPosition;arena.dataset.round=state.round;arena.dataset.blueScore=state.blueScore;arena.dataset.redScore=state.redScore;arena.dataset.phase=state.phase;arena.dataset.winner=state.winner||"";arena.dataset.clock=serverClock?"server":"browser";arena.setAttribute("aria-description",hebrew?"תוויות אגרוף וריפוי "+(state.giftInfoPosition==="aboveNames"?"מעל שמות המתמודדים":"בתחתית המסך"):"Punch and healing gifts "+(state.giftInfoPosition==="aboveNames"?"above fighter names":"at the bottom"))}
 document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(!(key in originalLabels))originalLabels[key]=el.textContent;const n=Number(key.slice(1))-1;el.textContent=hebrew?(translationsHe[n]||originalLabels[key]):originalLabels[key]});
 const status=$("status");if(status&&!status.dataset.connected)status.textContent=hebrew?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection";refreshBridge();
 }
@@ -197,6 +210,14 @@ if($("giftLibrary")){
 
 const canvas=$("arena");
 if(canvas){
+if(new URLSearchParams(location.search).get("capture")==="1"){
+ document.title="Boxing Arena — Game Capture";document.body.classList.add("capture-window");
+ const tools=$("captureTools");if(tools){tools.hidden=false;let hide;
+ const show=()=>{tools.classList.add("visible");clearTimeout(hide);hide=setTimeout(()=>tools.classList.remove("visible"),1800)};
+ const full=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{}tools.classList.remove("visible")};
+ $("captureFullscreen").onclick=full;window.addEventListener("keydown",e=>{if(e.key.toLowerCase()==="f"&&!e.ctrlKey&&!e.metaKey){e.preventDefault();full()}});window.addEventListener("pointermove",show);show();
+ }
+}
 const ctx=canvas.getContext("2d");
 const portraits={blue:new Image(),red:new Image()},urls={blue:"",red:""},giftIcons=new Map();
 function giftIcon(id,x,y,size=24){const gift=giftRules.gifts.get(id);if(!gift)return;let image=giftIcons.get(id);if(!image){image=new Image();image.src=gift.image;giftIcons.set(id,image)}if(image.complete&&image.naturalWidth)ctx.drawImage(image,x,y,size,size)}
@@ -371,9 +392,10 @@ if(state.action&&Date.now()-state.action.at<660){const a=state.action,age=Date.n
  if(a.type==="heal"){const x=a.side==="blue"?165:377;glow(x,550,120,"#46e7a166");txt("+"+a.amount,x,485-age/15,32,"#83ffc4")}
  else if(age>140&&age<440){const x=a.side==="blue"?310:230;glow(x,524,90,a.side==="blue"?"#38aaff99":"#ff5b6799");txt("−"+a.amount,x,510,32,"#fff0b3")}}
 if(!above){giftInformation("blue",22,832,true);giftInformation("red",282,832,true)}
-if(state.phase!=="running"){box(45,above?412:397,450,62,"#071329e8",18);
-const result=state.winner?(state.winner==="draw"?(state.language==="he"?"תיקו!":"DRAW!"):fighterName(state.winner==="blue"?"blue":"red")+(state.language==="he"?" ניצח!":" WINS!")):(state.phase==="paused"?(state.language==="he"?"המשחק מושהה":"MATCH PAUSED"):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?"));
-txt(result.slice(0,23),270,above?453:438,30,"#ffe69b")}
+if(state.phase!=="running"){const resultY=above?412:397;box(45,resultY,450,state.phase==="intermission"?94:62,"#071329f2",18);
+const result=state.winner?(state.winner==="draw"?(state.language==="he"?"תיקו!":"TIE!"):fighterName(state.winner==="blue"?"blue":"red")+(state.language==="he"?" ניצח!":" WON!")):(state.phase==="paused"?(state.language==="he"?"המשחק מושהה":"MATCH PAUSED"):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?"));
+txt(result.slice(0,23),270,above?453:438,30,"#ffe69b");
+if(state.phase==="intermission"){const next=Math.max(0,Math.ceil((state.nextRoundAt-Date.now())/1000));txt(state.language==="he"?"הסיבוב הבא בעוד "+next+"…":"NEXT ROUND IN "+next+"…",270,resultY+76,18,"#b8d8ff")}}
 }
 let lastFrame=0;
 function draw(t){const dt=Math.min(2.5,(t-lastFrame)/16.67||1);lastFrame=t;
@@ -388,28 +410,33 @@ requestAnimationFrame(draw)}
 
 // Only the dashboard tab owns the match timer. This avoids duplicate timeouts.
 localize();renderControls();
-if($("save"))setInterval(()=>{const patch=tickMatch(state);if(patch){commit(patch);log(state.language==="he"?(patch.phase==="running"?"סיבוב חדש התחיל":"תוצאת הסיבוב נשמרה"):(patch.phase==="running"?"New round started":"Round result recorded"))}},150);
+if($("save"))setInterval(()=>{if(!clockReady||serverClock)return;const patch=tickMatch(state);if(patch){commit(patch);log(state.language==="he"?(patch.phase==="running"?"סיבוב חדש התחיל":"תוצאת הסיבוב נשמרה"):(patch.phase==="running"?"New round started":"Round result recorded"))}},150);
 
 
-// The optional local Python relay also reaches isolated Live Studio browser profiles.
-// Static hosting still works using the original BroadcastChannel/storage transport.
+// The local server owns deadlines. Controller commands never overwrite newer rounds.
 (async function relay(){
- let available=false,publishing=Promise.resolve();
- const controller=!!$("save");
- async function readRelay(){const response=await fetch("./api/state",{cache:"no-store",signal:AbortSignal.timeout(2000)});if(!response.ok)throw Error();const body=await response.json();if(body.protocol!==KEY)throw Error();return body.state===null?null:normalizeState(body.state)}
+ const controller=!!$("save");let queue=Promise.resolve(),legacyPublishing=Promise.resolve();
+ function adopt(next,force=false){const verified=normalizeState(next);if(!force&&verified.revision<=state.revision)return;state=verified;if(controller)try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}channel?.postMessage(state);renderControls();localize()}
+ async function readRelay(){const response=await fetch("./api/state",{cache:"no-store",signal:AbortSignal.timeout(2000)});if(!response.ok)throw Error();const body=await response.json();if(body.protocol!==KEY)throw Error();serverClock=body.clock==="server";return body.state===null?null:normalizeState(body.state)}
  try{
- const remote=await readRelay();available=true;
- if(controller){
- publishState=next=>{const snapshot=JSON.stringify(next);publishing=publishing.catch(()=>{}).then(async()=>{
- const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:snapshot,signal:AbortSignal.timeout(2000)});
- if(!response.ok)throw Error("Relay refused state");
- }).catch(()=>log(state.language==="he"?"סנכרון מקומי נכשל — בדקו שהשרת פתוח":"Local relay sync failed — check the server"))};
- if(remote){state=normalizeState(remote);renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","matchMode"])$(field).value=field==="matchMode"?state.mode:state[field];refreshGiftControls(true);}
- else publishState(state);
- }else if(remote)sync(remote);
- }catch{return}
- if(!controller&&available){
- async function poll(){try{const next=await readRelay();if(next)sync(next)}catch{}setTimeout(poll,120)}
- poll();
- }
+ const remote=await readRelay();
+ if(controller&&serverClock){
+  sendCommand=command=>{queue=queue.catch(()=>{}).then(async()=>{
+   const response=await fetch("./api/command",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:JSON.stringify(command),signal:AbortSignal.timeout(3000)});
+   if(!response.ok)throw Error();const body=await response.json();adopt(body.state);
+  }).catch(()=>log(state.language==="he"?"הפעולה לא אושרה בשרת. בדקו שהשרת פועל":"Server did not confirm the action; check the launcher"))};
+  if(remote)adopt(remote,true);
+  else{
+   const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:JSON.stringify(state),signal:AbortSignal.timeout(2000)});
+   if(response.ok)adopt((await response.json()).state,true);else{const current=await readRelay();if(current)adopt(current,true)}
+  }
+ }else if(controller){
+  // Old/static servers retain the browser clock as a development fallback.
+  publishState=next=>{const snapshot=JSON.stringify(next);legacyPublishing=legacyPublishing.catch(()=>{}).then(async()=>{const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:snapshot,signal:AbortSignal.timeout(2000)});if(!response.ok)throw Error()}).catch(()=>log(state.language==="he"?"סנכרון מקומי נכשל":"Local relay sync failed"))};
+  if(remote)adopt(remote,true);else publishState(state);
+ }else if(remote)adopt(remote,true);
+ if(controller){for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","matchMode"])$(field).value=field==="matchMode"?state.mode:state[field];refreshGiftControls(true)}
+ clockReady=true;
+ if(!controller||serverClock){async function poll(){try{const next=await readRelay();if(next)adopt(next)}catch{}setTimeout(poll,120)}poll()}
+ }catch{clockReady=true}
 })();

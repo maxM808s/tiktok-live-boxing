@@ -2,12 +2,14 @@
 import http.client
 import importlib.util
 import json
+import sys
 from pathlib import Path
 import tempfile
 import threading
 import time
 import unittest
 
+sys.path.insert(0, str(Path(__file__).parents[1]))
 spec = importlib.util.spec_from_file_location('arena_server', Path(__file__).parents[1] / 'server.py')
 arena = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(arena)
@@ -119,6 +121,13 @@ class SecurityTests(unittest.TestCase):
             self.assertEqual(response.status, 400)
             response.read()
             conn.close()
+
+    def test_capture_and_command_boundaries(self):
+        headers = {'Content-Type': 'application/json', 'X-Boxing-Request': '1'}
+        self.assertEqual(self.request('/api/capture-window', 'POST', '{}', {'Content-Type':'application/json'})[0], 403)
+        self.assertEqual(self.request('/api/capture-window', 'POST', '{"url":"https://example.com"}', headers)[0], 400)
+        self.assertEqual(self.request('/api/command', 'POST', '{"type":"settings","patch":{"blueHp":0}}', headers)[0], 400)
+        self.assertEqual(self.request('/api/command', 'POST', '{"type":"shell"}', headers)[0], 400)
 
     def test_request_body_timeout(self):
         conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=8)

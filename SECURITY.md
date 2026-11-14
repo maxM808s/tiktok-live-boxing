@@ -50,3 +50,7 @@ BOXING_RELAY_URL=http://127.0.0.1:8768 node tests/relay.mjs
 ```
 
 Use a dedicated headless browser/test profile. The HTTP dummy-file tests never read the user's real `.env` or Git configuration.
+
+## Server clock and capture window
+
+The local server now owns match timing and validates explicit start/reset/pause/settings/gift commands. Snapshot replacement requires the current revision; stale snapshots cannot overwrite a transition. The capture endpoint uses the existing same-origin JSON checks, accepts only an empty object, and launches only a fixed installed Edge/Chrome path with a fixed loopback overlay URL and shell disabled. Browser capture profiles are separate from the dashboard. These endpoints retain the existing trusted-local-application boundary.
