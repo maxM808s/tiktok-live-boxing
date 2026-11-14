@@ -12,6 +12,25 @@ A local browser boxing game with a Hebrew/English dashboard, animated fighters a
 
 The Windows launcher retains its one-click workflow, Python detection and local port. It runs `server.py` for cross-browser synchronization. On other systems run `python server.py`.
 
+## Game modes and round scores
+
+Choose **Match setup → Game mode**, set the round length (15–300 seconds), and press **Save settings** before **Start match**.
+
+| Mode | Behavior |
+| --- | --- |
+| Single timed round | One round; the result stays visible until a new match is started. |
+| Endless timed rounds | A timed round ends on a knockout or the deadline. Each victory adds one point, then a fresh round starts automatically after a 3-second result display. This repeats until paused or reset. |
+| Best of 3 | First fighter to two round wins becomes champion. The next round starts automatically until that target is reached. |
+| Best of 5 | First fighter to three round wins becomes champion. |
+
+At the deadline, the fighter with more health wins. Equal health is a draw: no points are added, and automatic modes continue after the result display. Draws do not count toward a best-of victory target. Round numbers include drawn rounds.
+
+The dashboard and 9:16 overlay show the current round and both fighters' cumulative win points. A settled round awards its point only once, including after reloads. Each new round restores both fighters to 100 health and clears that round's coin totals; gift assignments and cumulative points remain.
+
+**Pause** freezes an active round's remaining time without changing health or scores, or stops automatic progression between rounds. **Resume match** continues the paused round, or starts the next round if the previous round was already settled. **Reset** stops the match and clears round/point totals while keeping the selected mode, fighters and gift assignments. **New match** starts a finished match over at round 1 with zero points. Mode selection is locked during a running/paused match; reset before choosing a different mode.
+
+Gifts affect health **only while a round is running**. Gifts during a pause or the 3-second result display are ignored, not queued for the next round. Native replay identities are still consumed so those events cannot be replayed later. Keep one dashboard open: it owns deadlines and automatic round transitions. If it is reloaded during the result display, it starts one fresh round when ready rather than awarding fictional results for elapsed time. Saving a different duration during play changes the next fresh round; it does not change the current round's deadline.
+
 ## Gift library and assignments
 
 The bundled **154-gift catalog and all 154 local icons** come from your [TikTok LIVE Battle repository](https://github.com/maxM808s/tiktok-live-battle). `catalog.json` retains its gift IDs, names, coin values, image paths, source URLs and verification metadata. Gift assets are copied locally, so the picker does not depend on remote image hosts. Source catalog blob: `0abfbc85564fc79c4ad17a7dfe9f17d2ad6848e2`; source tree: `2f1e8a77388ed3a3231974c38fd962d5f7bec811`.
@@ -35,7 +54,7 @@ Defaults: **Rose** supports blue and damages red; **TikTok** supports red and da
 - Streak gifts wait for `repeatEnd`. Intermediate updates do not score. Completed combos and duplicate messages are deduplicated using group/message identity. Completed combo counts must be whole numbers between 1 and 100,000.
 - Every accepted gift updates health immediately. Animation recovery never drops or postpones gift damage/healing. Several fast gifts may share the latest visible reaction, but all accepted coin values are applied.
 - **Comments, likes, follows, votes, punch commands and special commands never change health, scores, assignments or the winner.** Manual punch/vote/special controls were removed. Manual testing simulates an assigned gift only.
-- At zero health, the opponent wins and the loser animates into a knockout. Finished rounds cannot be healed or damaged. Start or Reset clears health and received-coin totals; gift assignments remain saved.
+- At zero health, the opponent wins and the loser animates into a knockout. Finished rounds, intermissions and paused rounds cannot be healed or damaged. Fresh rounds restore health and clear received-coin totals; gift assignments remain saved.
 - At the round deadline, remaining health decides the winner. Equal health is a draw; votes and received-coin totals never break ties. Received-coin totals are informational and include healing gifts.
 
 The overlay labels assigned gifts **Punch / אגרוף** and **Heal / ריפוי**, directly beside their icons. In Match setup, **Punch & healing information position** switches the gift information between the bottom of the screen and above the fighter names. Placement updates immediately, persists across reloads and synchronizes with isolated browser sources. The old coin-ratio banner and sword/heart legend are removed. Up to three punch gifts are shown, with a count for additional assignments. Green healing effects remain distinct from punch reactions.
@@ -96,3 +115,5 @@ The tests verify catalog assets, exclusive damage/healing assignments, exact coi
 The security review and remaining limitations are documented in [SECURITY.md](SECURITY.md). After pulling these fixes, close the previous server window and restart **Start-Boxing.cmd** so the new server protections take effect. Native TikFinity connections must be local; remote developer bridges must use WSS. Portraits accept HTTP(S) addresses without embedded credentials. Run `node tests/security.mjs`, `python tests/security_server.py`, and the dedicated hardened-server Chromium checks described in that report.
 
 Appearance/layout regression: run `node tests/appearance.mjs` against the static development fixture and dedicated Chromium debug profile. It checks direct healing selection, exclusive assignment, Hebrew/English placement updates, persistence and external overlay synchronization, and writes screenshots for both positions under `/tmp`.
+
+Mode tests: `node tests/match.mjs` covers deterministic round/series transitions and exact pause time. For the full hardened-server mode test, start `python server.py --port 8769` and run `node tests/modes-browser.mjs` with the dedicated Chromium debug profile. It exercises KO/time wins, automatic restarts, draws, reload-safe points, pause/resume, series champions and overlay score synchronization, and writes screenshots under `/tmp`.

@@ -1,3 +1,4 @@
+import {MATCH_MODES,winsNeeded} from "./match.mjs";
 // Validation at every browser input boundary: storage, tab messages and HTTP relay.
 export const MAX_STATE_BYTES=16384;
 const validText=v=>typeof v==='string'&&!/[\uD800-\uDFFF]/u.test(v);
@@ -17,9 +18,14 @@ export function createStateValidator(defaults,giftRules){
   if(!record(value))throw Error('Invalid state');
   const encoded=JSON.stringify(value);if(new TextEncoder().encode(encoded).length>MAX_STATE_BYTES)throw Error('State too large');
   const out={};for(const key of Object.keys(defaults))out[key]=value[key]??defaults[key];
-  if(!['en','he'].includes(out.language)||!['ready','running','finished'].includes(out.phase)||![null,'blue','red','draw'].includes(out.winner))throw Error('Invalid match flags');
+  if(!['en','he'].includes(out.language)||!['ready','running','intermission','paused','finished'].includes(out.phase)||![null,'blue','red','draw'].includes(out.winner))throw Error('Invalid match flags');
   if(!['bottom','aboveNames'].includes(out.giftInfoPosition))throw Error('Invalid gift information position');
-  if((out.phase==='finished')!==!!out.winner)throw Error('Invalid winner');
+  if((['ready','running'].includes(out.phase)&&out.winner!==null)||(['finished','intermission'].includes(out.phase)&&out.winner===null))throw Error('Invalid winner');
+  if(!MATCH_MODES.includes(out.mode)||!integer(out.round,1,Number.MAX_SAFE_INTEGER)||!integer(out.blueScore,0,Number.MAX_SAFE_INTEGER)||!integer(out.redScore,0,Number.MAX_SAFE_INTEGER)||!integer(out.remainingMs,0,300000)||!integer(out.nextRoundAt,0,now+60000)||![null,'blue','red'].includes(out.seriesWinner))throw Error('Invalid match mode state');
+  if(out.blueScore+out.redScore>out.round-(out.winner?0:1))throw Error('Invalid round score');
+  if(out.phase==='intermission'?(out.mode==='single'||!out.nextRoundAt||out.endsAt!==0):out.nextRoundAt!==0)throw Error('Invalid round transition');
+  if(out.seriesWinner!==null&&(out.phase!=='finished'||out.seriesWinner!==out.winner||out[out.seriesWinner+'Score']<winsNeeded(out.mode)))throw Error('Invalid series winner');
+  if(out.phase==='intermission'&&(out.blueScore>=winsNeeded(out.mode)||out.redScore>=winsNeeded(out.mode)))throw Error('Series already finished');
   for(const side of ['blue','red']){
    if(!validText(out[side+'Name'])||out[side+'Name'].length>26||!safePortraitURL(out[side+'Image']))throw Error('Invalid fighter');
    if(!integer(out[side+'Hp'],0,100)||!integer(out[side+'Coins'],0,Number.MAX_SAFE_INTEGER)||out[side+'Votes']!==0)throw Error('Invalid fighter numbers');

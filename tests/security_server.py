@@ -86,7 +86,7 @@ class SecurityTests(unittest.TestCase):
         self.assertIn("frame-ancestors 'self'", headers['Content-Security-Policy'])
 
     def test_invalid_states(self):
-        for patch in ({'giftInfoPosition': 'invalid'}, {'blueAttackGifts': {}}, {'blueAttackGifts': ['unknown']}, {'redHealGift': '5655'},
+        for patch in ({'mode': 'invalid'}, {'blueScore': 1}, {'mode': 'best3', 'phase': 'finished', 'winner': 'blue', 'blueScore': 1, 'seriesWinner': 'blue'}, {'round': 0}, {'blueScore': -1}, {'giftInfoPosition': 'invalid'}, {'blueAttackGifts': {}}, {'blueAttackGifts': ['unknown']}, {'redHealGift': '5655'},
                       {'action': {'side': 'blue', 'type': 'gift'}}, {'blueHp': float('nan')},
                       {'revision': 10**16}, {'blueHp': True}, {'blueImage': 'javascript:alert(1)'},
                       {'blueImage': 'https://user:pass@example.com/image'}, {'blueName': 'x' * 27}, {'blueName': '\ud800'}, {'blueName': '😀' * 14}):

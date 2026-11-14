@@ -1,3 +1,4 @@
+import {matchDefaults,startMatch,resetMatch,settleRound,pauseMatch,tickMatch,healthWinner} from "./match.mjs";
 import {createTikFinityAdapter} from "./tikfinity.mjs";
 import {createGiftRules,giftDefaults} from "./gift-rules.mjs";
 import {createStateValidator,safePortraitURL,safeSocketURL,MAX_STATE_BYTES} from "./security.mjs";
@@ -10,7 +11,7 @@ const translationsHe=["מרכז השליטה בשידור","אולפן מקומ�
 const originalLabels={};
 
 const KEY="boxing-arena-v1";
-const defaults={language:"en",blueName:"BIBI",redName:"EISENKOT",blueImage:"",redImage:"",duration:60,remaining:60,giftInfoPosition:"bottom",blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),phase:"ready",winner:null,startedAt:0,endsAt:0,action:null,revision:0};
+const defaults={language:"en",blueName:"BIBI",redName:"EISENKOT",blueImage:"",redImage:"",duration:60,remaining:60,giftInfoPosition:"bottom",blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),...matchDefaults(),phase:"ready",winner:null,startedAt:0,endsAt:0,action:null,revision:0};
 const normalizeState=createStateValidator(defaults,giftRules);
 function read(){try{
  const raw=localStorage.getItem(KEY)||"{}";if(new TextEncoder().encode(raw).length>MAX_STATE_BYTES)throw Error("State too large");
@@ -22,7 +23,7 @@ function read(){try{
  next.blueHp=Math.min(100,next.blueHp);next.redHp=Math.min(100,next.redHp);
  next.language=next.language==="he"?"he":"en";
  for(const field of ["blueName","redName","blueImage","redImage"])if(typeof next[field]!=="string")next[field]=defaults[field];
- if(!["ready","running","finished"].includes(next.phase))next.phase="ready";
+ if(!["ready","running","intermission","paused","finished"].includes(next.phase))next.phase="ready";
  if(next.action&&(!["blue","red"].includes(next.action.side)||!Number.isFinite(next.action.at)))next.action=null;
  try{Object.assign(next,giftRules.validate(next))}catch{Object.assign(next,giftDefaults())}
  next.blueVotes=0;next.redVotes=0;
@@ -46,7 +47,7 @@ function action(side,power,type="gift",details={}){
  const healing=type==="heal",target=(healing?side:side==="blue"?"red":"blue")+"Hp";
  const hp=clamp(state[target]+(healing?power:-power),0,100),amount=Math.abs(hp-state[target]);
  const patch={[target]:hp,[side+"Coins"]:Math.min(Number.MAX_SAFE_INTEGER,state[side+"Coins"]+power),action:{side,type,power,amount,giftId:details.giftId||"",name:details.name||"",at:Date.now(),id:crypto.randomUUID()}};
- if(!healing&&hp===0){patch.winner=side;patch.phase="finished";patch.remaining=Math.max(0,Math.ceil((state.endsAt-Date.now())/1000))}
+ if(!healing&&hp===0)Object.assign(patch,settleRound({...state,...patch},side));
  commit(patch);
  log((state.language==="he"?(side==="blue"?"כחול":"אדום"):side)+" · "+(details.name||"gift")+" · "+power+(state.language==="he"?" מטבעות":" coins")+" ("+(healing?"+":"−")+amount+" HP)");
 }
@@ -55,13 +56,16 @@ function applyGift(giftId,count=1){
  if(!event){log(state.language==="he"?"מתנה ללא שיוך התעלמה: "+giftId:"Unassigned/unknown gift ignored: "+giftId);return}
  action(event.side,event.power,event.type,event);
 }
-function start(){const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
-function reset(){commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log(state.language==="he"?"הקרב אופס":"Reset")}
-function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?"draw":state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[winner]):"Round finished: "+winner)}
-function renderControls(){if(!$("save"))return;localize();refreshStats();refreshGiftControls();document.querySelectorAll("[data-test-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=state.phase==="running";const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
-if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition"]){$(field).value=state[field];}
-$("save").onclick=()=>{const patch={...giftRules.validate(giftDraft),giftInfoPosition:$("giftInfoPosition").value};for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();if(!safePortraitURL(patch.blueImage)||!safePortraitURL(patch.redImage)){log(state.language==="he"?"יש להזין כתובת תמונה תקינה מסוג HTTP(S), ללא פרטי כניסה":"Use valid HTTP(S) portrait URLs without embedded credentials");return}patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(state.phase!=="running")patch.remaining=patch.duration;$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
-$("start").onclick=start;$("reset").onclick=reset;
+function start(){const patch=startMatch(state);if(!patch)return;commit(patch);log(state.language==="he"?"הסיבוב התחיל":"Round started")}
+function reset(){commit(resetMatch(state));log(state.language==="he"?"המשחק והניקוד אופסו":"Match and scores reset")}
+function finish(){const patch=settleRound(state,healthWinner(state));if(!patch)return;commit(patch);log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[patch.winner]):"Round finished: "+patch.winner)}
+function pause(){const patch=pauseMatch(state);if(patch){commit(patch);log(state.language==="he"?(patch.phase==="finished"?"המשחק הסתיים":"המשחק הושהה"):(patch.phase==="finished"?"Match finished":"Match paused"))}}
+function modeName(mode){return (state.language==="he"?{single:"סיבוב בודד",endless:"סיבובים אינסופיים",best3:"הטוב מ־3",best5:"הטוב מ־5"}:{single:"Single round",endless:"Endless rounds",best3:"Best of 3",best5:"Best of 5"})[mode]}
+function renderControls(){if(!$("save"))return;localize();refreshStats();refreshGiftControls();document.querySelectorAll("[data-test-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=["running","intermission"].includes(state.phase);$("pause").disabled=!["running","intermission"].includes(state.phase);$("matchMode").disabled=["running","intermission","paused"].includes(state.phase);
+$("start").querySelector("span").textContent=state.language==="he"?(state.phase==="paused"?"המשך משחק":state.phase==="finished"?"משחק חדש":"התחלת משחק"):(state.phase==="paused"?"Resume match":state.phase==="finished"?"New match":"Start match");const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
+if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","matchMode"]){$(field).value=field==="matchMode"?state.mode:state[field];}
+$("save").onclick=()=>{const patch={...giftRules.validate(giftDraft),giftInfoPosition:$("giftInfoPosition").value};for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();if(!safePortraitURL(patch.blueImage)||!safePortraitURL(patch.redImage)){log(state.language==="he"?"יש להזין כתובת תמונה תקינה מסוג HTTP(S), ללא פרטי כניסה":"Use valid HTTP(S) portrait URLs without embedded credentials");return}patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(["ready","finished"].includes(state.phase)){patch.remaining=patch.duration;patch.remainingMs=patch.duration*1000;const mode=$("matchMode").value;if(mode!==state.mode)Object.assign(patch,resetMatch({...state,...patch,mode}))}$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
+$("start").onclick=start;$("reset").onclick=reset;$("pause").onclick=pause;
 document.querySelectorAll("[data-test-gift]").forEach(b=>b.onclick=()=>{
  const id=$(b.dataset.testGift+"TestGift").value;if(id)applyGift(id);
 });
@@ -116,7 +120,7 @@ if($("preset")){
 $("language").addEventListener("change",()=>{commit({language:$("language").value})});
 $("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log(state.language==="he"?"הקרב נבחר — לחצו על שמירת הגדרות כדי להחיל":"Preset selected — click Save settings to apply")};
 $("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").querySelector("span").textContent=state.language==="he"?"✓ הועתק":"✓ Copied";setTimeout(()=>localize(),1800)}catch{window.prompt("Copy overlay URL:",url)}};
-function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+(state.language==="he"?" שנ׳":"s");$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueCoinsStat").textContent=(state.language==="he"?"מטבעות לכחול: ":"Blue gift coins: ")+state.blueCoins;$("redCoinsStat").textContent=(state.language==="he"?"מטבעות לאדום: ":"Red gift coins: ")+state.redCoins}
+function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.phase==="intermission"?Math.max(0,Math.ceil((state.nextRoundAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",intermission:"בין סיבובים",paused:"מושהה",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+(state.language==="he"?" שנ׳":"s");$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("roundStat").textContent=(state.language==="he"?"סיבוב ":"Round ")+state.round;$("modeStat").textContent=modeName(state.mode);$("blueScore").textContent=state.blueScore;$("redScore").textContent=state.redScore;$("blueScoreName").textContent=fighterName("blue");$("redScoreName").textContent=fighterName("red");$("blueCoinsStat").textContent=(state.language==="he"?"מטבעות לכחול: ":"Blue gift coins: ")+state.blueCoins;$("redCoinsStat").textContent=(state.language==="he"?"מטבעות לאדום: ":"Red gift coins: ")+state.redCoins}
 refreshStats=stats;setInterval(stats,150);stats();
 }
 
@@ -126,7 +130,7 @@ const hebrew=state.language==="he";
 document.querySelectorAll("[data-tab-en]").forEach(el=>el.textContent=hebrew?el.dataset.tabHe:el.dataset.tabEn);
 document.documentElement.lang=hebrew?"he":"en";
 document.documentElement.dir=hebrew?"rtl":"ltr";
-const arena=$("arena");if(arena){arena.setAttribute("aria-label",state.blueName+": "+state.blueHp+" · "+state.redName+": "+state.redHp);arena.dataset.giftInfoPosition=state.giftInfoPosition;arena.setAttribute("aria-description",hebrew?"תוויות אגרוף וריפוי "+(state.giftInfoPosition==="aboveNames"?"מעל שמות המתמודדים":"בתחתית המסך"):"Punch and healing gifts "+(state.giftInfoPosition==="aboveNames"?"above fighter names":"at the bottom"))}
+const arena=$("arena");if(arena){arena.setAttribute("aria-label",state.blueName+": "+state.blueHp+" · "+state.redName+": "+state.redHp);arena.dataset.giftInfoPosition=state.giftInfoPosition;arena.dataset.round=state.round;arena.dataset.blueScore=state.blueScore;arena.dataset.redScore=state.redScore;arena.dataset.phase=state.phase;arena.setAttribute("aria-description",hebrew?"תוויות אגרוף וריפוי "+(state.giftInfoPosition==="aboveNames"?"מעל שמות המתמודדים":"בתחתית המסך"):"Punch and healing gifts "+(state.giftInfoPosition==="aboveNames"?"above fighter names":"at the bottom"))}
 document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(!(key in originalLabels))originalLabels[key]=el.textContent;const n=Number(key.slice(1))-1;el.textContent=hebrew?(translationsHe[n]||originalLabels[key]):originalLabels[key]});
 const status=$("status");if(status&&!status.dataset.connected)status.textContent=hebrew?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection";refreshBridge();
 }
@@ -278,9 +282,9 @@ const a=state.action,age=a?Date.now()-a.at:9999,att=a?.type!=="heal"&&a?.side===
 const special=att&&a.power>=20,p=att?clamp(age/660,0,1):0,wind=att?Math.sin(Math.PI*Math.min(1,p*1.45)):0;
 const punch=att?(p<.27?-.18*Math.sin(Math.PI*p/.27):p<.43?ease((p-.27)/.16):1-ease((p-.43)/.57)):0;
 const recoil=hit?Math.sin(Math.PI*clamp((age-180)/470,0,1)):0;
-const victory=state.phase==="finished"&&state.winner===side;
+const victory=["finished","intermission","paused"].includes(state.phase)&&state.winner===side;
 const bounce=Math.sin(t/145+(blue?0:1.7))*3.5;
-const knock=state.phase==="finished"&&state[side+"Hp"]===0;
+const knock=["finished","intermission","paused"].includes(state.phase)&&state[side+"Hp"]===0;
 const fall=knock?ease((Date.now()-(state.action?.at||Date.now())-180)/650):0;
 ctx.save();ctx.translate(x+dir*(punch*31-recoil*22),y+(eisenkot?6:bibi?-6:0)+(knock?0:bounce)+fall*76);ctx.scale(dir*(eisenkot ? 1.1 : bibi ? 0.96 : 1),eisenkot ? 0.96 : bibi ? 1.03 : 1);
 if(knock){ctx.rotate(-1.35*fall);ctx.translate(-25*fall,20*fall)}
@@ -345,7 +349,10 @@ path([[0,754],[W,754],[W,818],[0,818]],"#90a9cb","#162b49",5);
 for(let i=0;i<11;i++)line([[i*54,754],[i*54+25,818]],"#b9c9dc44",2);
 box(0,0,W,95,"#071127");
 txt(state.language==="he"?"🥊 זירת האגרוף":"🥊 LIVE BOXING ARENA",270,58,27,"#f4f7ff");
-txt(state.language==="he"?"הקרב הגדול":"MAIN EVENT",270,142,26,"#ffe3a0");
+box(22,104,496,40,"#0b1730",10);
+txt(fighterName("blue").slice(0,12)+" · "+state.blueScore,139,130,16,"#a5d8ff");
+txt((state.mode==="endless"?"∞ ":"")+(state.language==="he"?"סיבוב ":"ROUND ")+state.round,270,130,15,"#ffe3a0");
+txt(fighterName("red").slice(0,12)+" · "+state.redScore,401,130,16,"#ffb0bb");
 const above=state.giftInfoPosition==="aboveNames";
 for(const side of ["blue","red"]){const left=side==="blue",x=left?22:282,hp=state[side+"Hp"],name=fighterName(side);
  const cardY=above?154:169,nameY=above?250:204,barY=above?264:218;
@@ -354,16 +361,18 @@ for(const side of ["blue","red"]){const left=side==="blue",x=left?22:282,hp=stat
  box(x+10,barY,216,24,"#263754",7);box(x+10,barY,216*hp/100,24,left?"#298fff":"#f34660",7);
  txt(name.slice(0,15),x+118,nameY,20,left?"#a5d8ff":"#ffb0bb");
  txt(Math.round(hp)+(state.language==="he"?" חיים":" HP"),x+118,barY+45,15)}
-const rem=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;
+const rem=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.phase==="intermission"?Math.max(0,Math.ceil((state.nextRoundAt-Date.now())/1000)):state.remaining;
 const clockY=above?340:292;
-box(204,clockY,132,62,"#070d1e",17);txt(String(rem).padStart(2,"0"),270,clockY+44,38,"#ffe4a1");
+box(204,clockY,132,62,"#070d1e",17);
+if(["intermission","paused"].includes(state.phase)){txt(state.language==="he"?(state.phase==="paused"?"מושהה":"סיבוב הבא"):(state.phase==="paused"?"PAUSED":"NEXT ROUND"),270,clockY+17,12,"#bbcee8");txt(String(rem).padStart(2,"0"),270,clockY+49,30,"#ffe4a1")}
+else txt(String(rem).padStart(2,"0"),270,clockY+44,38,"#ffe4a1");
 fighter(165,590,"blue",t);fighter(377,590,"red",t);
 if(state.action&&Date.now()-state.action.at<660){const a=state.action,age=Date.now()-a.at;
  if(a.type==="heal"){const x=a.side==="blue"?165:377;glow(x,550,120,"#46e7a166");txt("+"+a.amount,x,485-age/15,32,"#83ffc4")}
  else if(age>140&&age<440){const x=a.side==="blue"?310:230;glow(x,524,90,a.side==="blue"?"#38aaff99":"#ff5b6799");txt("−"+a.amount,x,510,32,"#fff0b3")}}
 if(!above){giftInformation("blue",22,832,true);giftInformation("red",282,832,true)}
 if(state.phase!=="running"){box(45,above?412:397,450,62,"#071329e8",18);
-const result=state.phase==="finished"?(state.winner==="draw"?(state.language==="he"?"תיקו!":"DRAW!"):fighterName(state.winner==="blue"?"blue":"red")+(state.language==="he"?" ניצח!":" WINS!")):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?");
+const result=state.winner?(state.winner==="draw"?(state.language==="he"?"תיקו!":"DRAW!"):fighterName(state.winner==="blue"?"blue":"red")+(state.language==="he"?" ניצח!":" WINS!")):(state.phase==="paused"?(state.language==="he"?"המשחק מושהה":"MATCH PAUSED"):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?"));
 txt(result.slice(0,23),270,above?453:438,30,"#ffe69b")}
 }
 let lastFrame=0;
@@ -379,7 +388,7 @@ requestAnimationFrame(draw)}
 
 // Only the dashboard tab owns the match timer. This avoids duplicate timeouts.
 localize();renderControls();
-if($("save"))setInterval(()=>{if(state.phase==="running"&&Date.now()>=state.endsAt)finish()},200);
+if($("save"))setInterval(()=>{const patch=tickMatch(state);if(patch){commit(patch);log(state.language==="he"?(patch.phase==="running"?"סיבוב חדש התחיל":"תוצאת הסיבוב נשמרה"):(patch.phase==="running"?"New round started":"Round result recorded"))}},150);
 
 
 // The optional local Python relay also reaches isolated Live Studio browser profiles.
@@ -395,7 +404,7 @@ if($("save"))setInterval(()=>{if(state.phase==="running"&&Date.now()>=state.ends
  const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:snapshot,signal:AbortSignal.timeout(2000)});
  if(!response.ok)throw Error("Relay refused state");
  }).catch(()=>log(state.language==="he"?"סנכרון מקומי נכשל — בדקו שהשרת פתוח":"Local relay sync failed — check the server"))};
- if(remote){state=normalizeState(remote);renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition"])$(field).value=state[field];refreshGiftControls(true);}
+ if(remote){state=normalizeState(remote);renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration","giftInfoPosition","matchMode"])$(field).value=field==="matchMode"?state.mode:state[field];refreshGiftControls(true);}
  else publishState(state);
  }else if(remote)sync(remote);
  }catch{return}

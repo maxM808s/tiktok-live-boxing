@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlparse
 ROOT = Path(__file__).resolve().parent
 CATALOG = {g['id']: g for g in json.loads((ROOT / 'catalog.json').read_text(encoding='utf-8'))}
 PUBLIC_FILES = {'index.html', 'overlay.html', 'style.css', 'app.js', 'tikfinity.mjs',
-                'gift-rules.mjs', 'security.mjs', 'catalog.json'} | {g['image'] for g in CATALOG.values()}
+                'gift-rules.mjs', 'security.mjs', 'match.mjs', 'catalog.json'} | {g['image'] for g in CATALOG.values()}
 MAX_BODY = 16384
 MAX_INTEGER = 9007199254740991
 
@@ -55,10 +55,23 @@ def validate_state(value):
     out['giftInfoPosition'] = value.get('giftInfoPosition', 'bottom')
     if out['giftInfoPosition'] not in ('bottom', 'aboveNames'):
         raise ValueError('Invalid gift information position')
-    if out['language'] not in ('en', 'he') or out['phase'] not in ('ready', 'running', 'finished'):
+    if out['language'] not in ('en', 'he') or out['phase'] not in ('ready', 'running', 'intermission', 'paused', 'finished'):
         raise ValueError('Invalid flags')
-    if out['winner'] not in (None, 'blue', 'red', 'draw') or (out['phase'] == 'finished') != bool(out['winner']):
+    if out['winner'] not in (None, 'blue', 'red', 'draw') or (out['phase'] in ('ready', 'running') and out['winner'] is not None) or (out['phase'] in ('finished', 'intermission') and out['winner'] is None):
         raise ValueError('Invalid winner')
+    for key, default in {'mode': 'single', 'round': 1, 'blueScore': 0, 'redScore': 0, 'remainingMs': 60000, 'nextRoundAt': 0, 'seriesWinner': None}.items():
+        out[key] = value.get(key, default)
+    if out['mode'] not in ('single', 'endless', 'best3', 'best5') or not number(out['round'], 1, MAX_INTEGER) or not number(out['blueScore'], 0, MAX_INTEGER) or not number(out['redScore'], 0, MAX_INTEGER) or not number(out['remainingMs'], 0, 300000) or not number(out['nextRoundAt'], 0, now + 60000) or out['seriesWinner'] not in (None, 'blue', 'red'):
+        raise ValueError('Invalid match mode state')
+    if out['blueScore'] + out['redScore'] > out['round'] - (0 if out['winner'] else 1):
+        raise ValueError('Invalid round score')
+    if (out['phase'] == 'intermission' and (out['mode'] == 'single' or not out['nextRoundAt'] or out['endsAt'] != 0)) or (out['phase'] != 'intermission' and out['nextRoundAt'] != 0):
+        raise ValueError('Invalid round transition')
+    target = {'single': 1, 'best3': 2, 'best5': 3}.get(out['mode'], float('inf'))
+    if out['seriesWinner'] is not None and (out['phase'] != 'finished' or out['seriesWinner'] != out['winner'] or out[out['seriesWinner'] + 'Score'] < target):
+        raise ValueError('Invalid series winner')
+    if out['phase'] == 'intermission' and (out['blueScore'] >= target or out['redScore'] >= target):
+        raise ValueError('Series already finished')
     used = set()
     for side in ('blue', 'red'):
         if not text(out[side + 'Name'], 26) or not portrait(out[side + 'Image']):
