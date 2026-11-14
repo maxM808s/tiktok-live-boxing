@@ -57,7 +57,7 @@ function path(points,fill,stroke,width=2){ctx.beginPath();ctx.moveTo(...points[0
 function ellipse(x,y,rx,ry,color){ctx.beginPath();ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2);ctx.fillStyle=color;ctx.fill()}
 function line(points,color,width=5){ctx.beginPath();ctx.moveTo(...points[0]);for(let i=1;i<points.length;i++)ctx.lineTo(...points[i]);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap="round";ctx.lineJoin="round";ctx.stroke()}
 function box(x,y,w,h,color,r=0){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
-function txt(t,x,y,size=24,color="#fff",align="center"){ctx.font="900 "+size+"px system-ui,Arial";ctx.textAlign=align;ctx.lineWidth=4;ctx.strokeStyle="#071027";ctx.strokeText(String(t),x,y);ctx.fillStyle=color;ctx.fillText(String(t),x,y)}
+function txt(t,x,y,size=24,color="#fff",align="center"){const hebrew=/[\u0590-\u05FF]/.test(String(t));ctx.font=(hebrew?"800 ":"900 ")+size+"px "+(hebrew?'"Rubik",Arial,sans-serif':'"Barlow Condensed","Rubik",Arial,sans-serif');ctx.textAlign=align;ctx.lineWidth=4;ctx.strokeStyle="#071027";ctx.strokeText(String(t),x,y);ctx.fillStyle=color;ctx.fillText(String(t),x,y)}
 function glow(x,y,r,color){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,"transparent");ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2)}
 function portrait(side,url){if(url===urls[side])return;urls[side]=url;portraits[side]=new Image();if(/^https?:\/\//.test(url))portraits[side].src=url}
 function burst(x,y,side,special){for(let i=0;i<(special?40:18);i++){const a=rnd(0,Math.PI*2),speed=rnd(2,special?14:9);particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,life:rnd(16,35),max:35,r:rnd(2,special?8:5),color:i%3===0?"#fff":side==="blue"?"#65d7ff":"#ffb44b"})}}
