@@ -1,5 +1,6 @@
+import {createTikFinityAdapter} from "./tikfinity.mjs";
 let refreshBridge=()=>{},refreshStats=()=>{},publishState=()=>{};
-const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת מסך השידור 9:16","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור אירועים","התחברות","מצב הדגמה · אין חיבור לשידור חי","החיבור ל־S2E עדיין לא נבדק. כרגע ניתן לקבל אירועי בדיקה בפורמט JSON בלבד.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
+const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת מסך השידור 9:16","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור TikFinity","התחברות","מצב הדגמה · אין חיבור לשידור חי","יש לפתוח את TikFinity Desktop באותו מחשב ולחבר לשידור. חיבור השקע לבדו אינו מאמת קבלת אירועים חיים.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
 const originalLabels={};
 
 const KEY="boxing-arena-v1";
@@ -18,6 +19,8 @@ function read(){try{
  return next;
  }catch{return {...defaults}}}
 let state=read();
+const liveActions=[];
+function enqueueLive(side,power,type){if(state.phase!=="running")return;if(liveActions.length>=100){log(state.language==="he"?"תור המתקפות מלא":"Live attack queue full");return}liveActions.push({side,power,type,round:state.startedAt})}
 const channel=typeof BroadcastChannel!=="undefined"?new BroadcastChannel(KEY):null;
 function commit(patch){state={...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)};try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
 function sync(next){if(next?.revision>=state.revision){state={...defaults,...next};localize();renderControls()}}
@@ -27,9 +30,9 @@ const $=id=>document.getElementById(id);
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 function log(message){const el=$("log");if(!el)return;const row=document.createElement("div");row.dir="auto";row.textContent=new Date().toLocaleTimeString(state.language==="he"?"he-IL":"en-US")+" "+message;el.prepend(row);while(el.children.length>60)el.lastChild.remove()}
 function action(side,power=6,type="punch"){if(!["blue","red"].includes(side)||state.phase!=="running")return;if(Date.now()>=state.endsAt){finish();return}if(state.action&&Date.now()-state.action.at<660)return;const target=side==="blue"?"redHp":"blueHp";const hp=clamp(state[target]-power,0,100);const patch={[target]:hp,action:{side,type,at:Date.now(),id:crypto.randomUUID()},winner:hp===0?side:null};if(hp===0){patch.phase="finished";patch.remaining=Math.max(0,Math.ceil((state.endsAt-Date.now())/1000))}commit(patch);log((state.language==="he"?(side==="blue"?"כחול":"אדום")+" · "+({punch:"אגרוף",special:"מתקפה מיוחדת",gift:"מתנה"}[type]||type):side+" "+type)+" (-"+power+")")}
-function vote(side){if(!["blue","red"].includes(side)||state.phase!=="running")return;if(Date.now()>=state.endsAt){finish();return}const field=side+"Votes";const n=state[field]+1;commit({[field]:n});if(n%3===0)action(side,4,"punch");log(state.language==="he"?"הצבעה ל"+(side==="blue"?"כחול":"אדום"):side+" vote")}
-function start(){const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
-function reset(){commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log(state.language==="he"?"הקרב אופס":"Reset")}
+function vote(side,count=1,live=false){if(!["blue","red"].includes(side)||state.phase!=="running")return;if(Date.now()>=state.endsAt){finish();return}const field=side+"Votes";const n=state[field]+count;const punches=Math.floor(n/3)-Math.floor(state[field]/3);commit({[field]:n});if(live){for(let i=0;i<punches;i++)enqueueLive(side,4,"punch")}else if(punches)action(side,4,"punch");log(state.language==="he"?"הצבעה ל"+(side==="blue"?"כחול":"אדום"):side+" vote")}
+function start(){liveActions.length=0;const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
+function reset(){liveActions.length=0;commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log(state.language==="he"?"הקרב אופס":"Reset")}
 function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?(state.blueVotes===state.redVotes?"draw":state.blueVotes>state.redVotes?"blue":"red"):state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[winner]):"Round finished: "+winner)}
 function renderControls(){if(!$("save"))return;localize();refreshStats();document.querySelectorAll("[data-hit],[data-special],[data-vote],[data-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=state.phase==="running";const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
 if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration"]){$(field).value=state[field];}
@@ -39,27 +42,39 @@ document.querySelectorAll("[data-hit]").forEach(b=>b.onclick=()=>action(b.datase
 document.querySelectorAll("[data-special]").forEach(b=>b.onclick=()=>action(b.dataset.special,20,"special"));
 document.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>vote(b.dataset.vote));
 document.querySelectorAll("[data-gift]").forEach(b=>b.onclick=()=>action(b.dataset.gift,12,"gift"));
-let ws=null;
-const seen=new Set();
+let ws=null,received=0;
+const adapter=createTikFinityAdapter(),seen=new Set();
+$("bridgeMode").value="tikfinity";
+$("wsUrl").value="ws://localhost:21213/";
+$("bridgeMode").onchange=()=>{if(ws){const previous=ws;ws=null;previous.close()}received=0;$("wsUrl").value=$("bridgeMode").value==="tikfinity"?"ws://localhost:21213/":"ws://127.0.0.1:8765/";bridgeStatus(false)};
+setInterval(()=>{if(state.phase!=="running"){liveActions.length=0;return}if(state.action&&Date.now()-state.action.at<660)return;const next=liveActions.shift();if(next&&next.round===state.startedAt)action(next.side,next.power,next.type)},80);
 refreshBridge=()=>bridgeStatus(ws?.readyState===WebSocket.OPEN);
 function bridgeStatus(connected){
  for(const id of ["status","connectionBadge"]){const el=$(id);el.dataset.connected=connected?"1":"";}
- $("status").textContent=state.language==="he"?(connected?"גשר בדיקה מחובר · S2E לא אומת":"מצב הדגמה · אין חיבור לשידור חי"):(connected?"Test bridge connected · S2E unverified":"Demo mode · no live connection");
- $("connectionBadge").textContent=state.language==="he"?(connected?"● גשר בדיקה":"● הדגמה"):(connected?"● TEST BRIDGE":"● DEMO");
- $("connect").querySelector("span").textContent=state.language==="he"?(connected?"ניתוק":"התחברות"):(connected?"Disconnect bridge":"Connect bridge");
+ const native=$("bridgeMode").value==="tikfinity";
+ $("bridgeMode").disabled=!!ws;
+ $("wsUrl").disabled=!!ws;
+ $("status").textContent=state.language==="he"?(connected?(native?"שקע TikFinity מחובר · אירועים שהתקבלו: "+received:"גשר בדיקה מחובר"):"מצב הדגמה · אין חיבור לשידור חי"):(connected?(native?"TikFinity socket connected · events received: "+received:"Test bridge connected"):"Demo mode · no live connection");
+ $("connectionBadge").textContent=connected?(native?"● TikFinity":"● TEST BRIDGE"):(state.language==="he"?"● הדגמה":"● DEMO");
+ $("connect").querySelector("span").textContent=state.language==="he"?(connected?"ניתוק":native?"חיבור TikFinity":"התחברות"):(connected?"Disconnect":native?"Connect TikFinity":"Connect bridge");
 }
 $("connect").onclick=()=>{
- if(ws){const previous=ws;ws=null;previous.close();bridgeStatus(false);return}
+ if(ws){const previous=ws;ws=null;previous.close();liveActions.length=0;bridgeStatus(false);return}
  const url=$("wsUrl").value.trim();
  try{const parsed=new URL(url);if(!["ws:","wss:"].includes(parsed.protocol))throw Error();}catch{log(state.language==="he"?"יש להזין כתובת ws:// או wss://":"Enter a ws:// or wss:// URL");return}
  try{
- const socket=new WebSocket(url);ws=socket;
- socket.onopen=()=>{if(ws===socket){bridgeStatus(true);log("Test bridge connected · S2E unverified")}};
+ const socket=new WebSocket(url);ws=socket;received=0;bridgeStatus(false);
+ socket.onopen=()=>{if(ws===socket){bridgeStatus(true);log($("bridgeMode").value==="tikfinity"?"TikFinity socket connected — awaiting events":"Test bridge connected")}};
  socket.onclose=()=>{if(ws===socket){ws=null;bridgeStatus(false)}};
  socket.onerror=()=>{if(ws===socket)log("Bridge error")};
  socket.onmessage=e=>{if(ws!==socket)return;try{
- if(typeof e.data!=="string"||e.data.length>4096)throw Error();
+ if(typeof e.data!=="string"||e.data.length>262144)throw Error();
  const event=JSON.parse(e.data);
+ if($("bridgeMode").value==="tikfinity"){
+  const actions=adapter.receive(event);received++;bridgeStatus(true);
+  for(const item of actions){if(item.type==="vote")vote(item.side,item.count,true);else enqueueLive(item.side,Math.min(100,12*item.count),"gift")}
+  return;
+ }
  if(!event||!["vote","comment","like","gift","punch","special"].includes(event.type)||!["blue","red"].includes(event.side))throw Error();
  if(event.id!==undefined){if(typeof event.id!=="string"||event.id.length>128)throw Error();if(seen.has(event.id))return;seen.add(event.id);if(seen.size>1000)seen.delete(seen.values().next().value)}
  if(event.type==="vote"||event.type==="comment"||event.type==="like")vote(event.side);

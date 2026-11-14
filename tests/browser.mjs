@@ -16,12 +16,12 @@ async function page(path){
  await delay(800);return {call,evalJS,errors,ws};
 }
 for(const target of await(await fetch('http://127.0.0.1:9222/json')).json())if(target.url.startsWith(base))await fetch('http://127.0.0.1:9222/json/close/'+target.id);
-// Minimal WebSocket fixture; all payloads below are synthetic, never real S2E events.
-let bridgeSocket;
+// Minimal WebSocket fixture; all payloads below are synthetic, never real provider events.
+let bridgeSocket;const bridgeSockets=new Set();
 const bridge=createServer();
-bridge.on('upgrade',(req,socket)=>{const accept=createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');bridgeSocket=socket;socket.on('data',()=>{});socket.on('error',()=>{});});
+bridge.on('upgrade',(req,socket)=>{const accept=createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');bridgeSocket=socket;bridgeSockets.add(socket);socket.on('close',()=>bridgeSockets.delete(socket));socket.on('data',data=>{if((data[0]&15)===8)socket.end(Buffer.from([0x88,0]))});socket.on('error',()=>{});});
 await new Promise(r=>bridge.listen(0,'127.0.0.1',r));
-const send=event=>{const text=typeof event==='string'?event:JSON.stringify(event);const data=Buffer.from(text);assert(data.length<126);bridgeSocket.write(Buffer.concat([Buffer.from([0x81,data.length]),data]));};
+const send=event=>{const text=typeof event==='string'?event:JSON.stringify(event);const data=Buffer.from(text);assert(data.length<65536);const header=data.length<126?Buffer.from([0x81,data.length]):Buffer.from([0x81,126,data.length>>8,data.length&255]);bridgeSocket.write(Buffer.concat([header,data]));};
 const p=await page('/index.html');
 const e=p.evalJS;
 await e('localStorage.clear();location.reload()');await delay(600);
@@ -61,7 +61,7 @@ await p.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceSc
 assert.equal(await e('document.documentElement.scrollWidth<=innerWidth'),true,'mobile layout fits');
 // Connection status, strict payload rejection, deduplication and normalized likes/comments.
 await e('document.querySelector("#reset").click();document.querySelector("#start").click();document.querySelector("[data-tab=connection]").click()');
-await e(`document.querySelector('#wsUrl').value='ws://127.0.0.1:${bridge.address().port}';document.querySelector('#connect').click()`);await delay(200);
+await e(`document.querySelector('#bridgeMode').value='normalized';document.querySelector('#bridgeMode').dispatchEvent(new Event('change'));document.querySelector('#wsUrl').value='ws://127.0.0.1:${bridge.address().port}';document.querySelector('#connect').click()`);await delay(200);
 assert.equal(await e('document.querySelector("#connectionBadge").dataset.connected'),'1');
 send({type:'like',side:'blue',id:'like-1'});send({type:'like',side:'blue',id:'like-1'});send({type:'comment',side:'blue',id:'comment-1'});send({type:'vote',side:'blue',id:'vote-1'});send('null');send('{broken');send({type:'gift',side:'unknown'});await delay(300);
 assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).blueVotes'),3);
@@ -69,7 +69,22 @@ assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).redHp'
 assert.equal(await e('document.querySelector("#status").dataset.connected'),'1','status survives game updates');
 await e('document.querySelector("#connect").click()');await delay(100);
 assert.equal(await e('document.querySelector("#connectionBadge").dataset.connected'),'');
-bridgeSocket.destroy();await new Promise(r=>bridge.close(r));
+// Native TikFinity envelopes travel through a real WebSocket into the game and overlay.
+await e('document.querySelector("#reset").click();document.querySelector("#start").click();document.querySelector("#bridgeMode").value="tikfinity";document.querySelector("#bridgeMode").dispatchEvent(new Event("change"))');
+await e(`document.querySelector('#wsUrl').value='ws://127.0.0.1:${bridge.address().port}';document.querySelector('#connect').click()`);await delay(200);
+send({event:'chat',data:{userId:'u1',comment:'1',msgId:'native1'}});
+send({event:'like',data:{userId:'u1',likeCount:20,msgId:'native2'}});await delay(300);
+assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).blueVotes'),3);
+assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).redHp'),96);
+send({event:'gift',data:{userId:'u1',giftId:5,giftType:1,repeatCount:2,repeatEnd:false,groupId:'combo'}});await delay(150);
+assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).redHp'),96,'unfinished gifts do not damage');
+send({event:'gift',data:{userId:'u1',giftId:5,giftType:1,repeatCount:2,repeatEnd:true,groupId:'combo'}});
+send({event:'gift',data:{userId:'u1',giftId:5,giftType:1,repeatCount:2,repeatEnd:true,groupId:'combo'}});await delay(1000);
+assert.equal(await e('JSON.parse(localStorage.getItem("boxing-arena-v1")).redHp'),72,'combo queued through recovery and applied once');
+assert.match(await o.evalJS('document.querySelector("canvas").getAttribute("aria-label")'),/72/);
+assert.match(await e('document.querySelector("#status").textContent'),/TikFinity/);
+await e('document.querySelector("#connect").click()');await delay(100);
+for(const socket of bridgeSockets)socket.destroy();await new Promise(r=>bridge.close(r));
 // KO and winner; damage cannot continue after the knockout.
 await e('document.querySelector("#reset").click();document.querySelector("#start").click()');
 for(let i=0;i<5;i++){await e('document.querySelector("[data-special=blue]").click()');await delay(710)}
@@ -84,4 +99,4 @@ assert.equal(await e('document.querySelector("#redName").value'),'EISENKOT');
 assert.equal(await e('document.querySelector("#duration").value'),'300');
 assert.equal(await e('document.documentElement.dir'),'ltr');
 assert.deepEqual(p.errors,[]);assert.deepEqual(o.errors,[]);
-await p.call('Page.close');await o.call('Page.close');p.ws.close();o.ws.close();console.log('PASS: round controls, recovery, reload, votes, RTL, cross-tab overlay, copy label, expiry, mobile layout, WebSocket validation/deduplication, normalized likes/comments, knockout; no JavaScript exceptions.');
+await p.call('Page.close');await o.call('Page.close');p.ws.close();o.ws.close();console.log('PASS: round controls, recovery, reload, votes, RTL, cross-tab overlay, copy label, expiry, mobile layout, WebSocket validation/deduplication, normalized likes/comments, native TikFinity chat/likes/gift combos, knockout; no JavaScript exceptions.');

@@ -1,6 +1,6 @@
 # 🥊 TikTok LIVE Boxing Arena
 
-A local browser boxing game with a bilingual control dashboard and a 9:16 overlay. **S2E/TikTok is not connected or verified.**
+A local browser boxing game with a bilingual control dashboard and a 9:16 overlay. **TikFinity protocol support is implemented and simulator-tested. A real TikFinity/TikTok LIVE session still needs verification on your PC.**
 
 ## Run on Windows
 
@@ -21,7 +21,7 @@ The local relay shares state even when the overlay uses a separate browser profi
 ## Controls and rules
 
 - Punch: 6 damage; every third vote: 4 damage; gift: 12; special: 20.
-- Attacks share a 660 ms recovery period. Attacks during recovery are ignored; votes still count, but their triggered punch may be ignored. The future live adapter must aggregate/rate-limit events with these rules in mind.
+- Attacks share a 660 ms recovery period. Manual and normalized test attacks during recovery are ignored; their votes still count. Native TikFinity attacks queue through recovery, subject to the limits below.
 - At zero health the loser animates into a knockout. At the time limit, health decides the winner, then votes break ties. A points loss leaves the fighter standing.
 - Start is disabled during a running round; Reset ends it. Settings saved during a round change its next duration, not the current deadline.
 - Built-in procedural arcade caricatures recognize Bibi/Netanyahu and Eisenkot in English/Hebrew. Custom names and HTTP(S) portrait URLs remain supported; unavailable portraits fall back to the built-in face. These are Canvas vector fighters, not commissioned sprite artwork.
@@ -33,21 +33,33 @@ The local relay shares state even when the overlay uses a separate browser profi
 
 Static hosting (`python -m http.server 8766`) still supports the original BroadcastChannel/localStorage synchronization within the same origin and browser profile. Separate Live Studio browser profiles require `server.py`. Use the exact same hostname and port for dashboard and overlay. The relay rejects cross-site, stale and invalid writes and has no external dependencies.
 
-## Future S2E adapter: normalized test protocol
+## Connect TikFinity Desktop
 
-In **Connections**, supply the URL of a WebSocket bridge you control. Connected status says **TEST BRIDGE**, never TikTok connected. A bridge must translate actual provider payloads into one of these messages:
+The game now accepts TikFinity's native `{event, data}` messages directly. No intermediate adapter app is needed. [Official TikFinity Event API documentation](https://tikfinity.zerody.one/tiktok/dapi) specifies `ws://localhost:21213/` and requires TikFinity Desktop on the same computer. Payload fields follow the linked [TikTok-Live-Connector documentation](https://github.com/zerodytrash/TikTok-Live-Connector).
+
+1. Open **TikFinity Desktop** on your streaming PC, finish its setup, and connect it to your TikTok LIVE. Use the desktop app, not just the TikFinity website.
+2. Run **Start-Boxing.cmd** and open **Connections** on the dashboard.
+3. Keep **TikFinity Desktop** selected and use `ws://localhost:21213/` (or the endpoint shown by your installed version). Click **Connect TikFinity**.
+4. Confirm **TikFinity socket connected**, then start a round. From another viewer account, comment `1` for blue or `2` for red. The vote counter must increase. Every three votes queue a 4-damage punch.
+5. Send likes from that viewer. Every **10 received likes** count as one additional vote for the chosen team. Partial batches accumulate. The game uses `likeCount`, not the stream's total likes; it can only count events TikFinity actually delivers.
+6. After choosing a team, send a gift. Non-streak gifts apply immediately through the attack queue. Streak gifts wait for `repeatEnd` and apply **12 × repeatCount damage**, capped at **100 per combo**. Intermediate updates and duplicate completed combos do not cause extra damage. Gift prices do not affect damage.
+7. Confirm the health, votes and timer agree in the dashboard preview and Live Studio overlay.
+
+Team choices last for the current dashboard session; reloading the dashboard requires viewers to choose again. A viewer may switch teams by commenting the other number. Likes and gifts from viewers who have not chosen a team are ignored. Team selections can be made before the round, but votes and damage only apply while it runs. Every gift uses the selected team; there is no gift-name/coin-price mapping.
+
+Live attacks wait through the 660 ms recovery period in a queue of at most 100 pending attacks. Excess attacks are dropped with an activity-log message. Start, Reset, a finished round, and manual disconnect clear pending actions. The native adapter retains up to 5,000 event IDs and 10,000 viewer selections in memory. Deduplication uses message IDs or completed gift-group IDs when supplied; it cannot guarantee replay protection for events without IDs or across reloads. Incoming messages are limited to 256 KiB, with like/gift batch counts capped at 1,000 before applying game rules.
+
+A connected socket confirms transport only. The event count shows valid provider messages received, including non-game events; game counters confirm that chat/likes/gifts were mapped. **No real TikFinity desktop instance, account, or live gift has been tested here.** The automated tests use a local simulator shaped according to the documented API. To finish verification, perform steps 4–7 on your PC. Do not purchase gifts just to debug basic connectivity: test comments first. If connection fails, verify the desktop app is running on the same PC, its local Event API endpoint is available, and that the address matches your version. There is no automatic reconnect; press Connect again after restoring TikFinity.
+
+### Advanced normalized test bridge
+
+The previous generic protocol remains available under **Normalized test bridge (advanced)** for development fixtures:
 
 ```json
-{"id":"unique-vote-123","type":"comment","side":"blue"}
-{"id":"unique-like-456","type":"like","side":"red"}
-{"id":"unique-gift-789","type":"gift","side":"blue"}
+{"id":"unique-event-123","type":"vote","side":"blue"}
 ```
 
-Supported types: `vote`, `comment`, `like`, `gift`, `punch`, `special`. Sides: `blue`, `red`. `vote`, `comment` and `like` each count as one vote. The adapter must resolve comment 1/2, viewer team selection, gift mappings and combo completion before sending events. Provider counts and gift prices are not interpreted by the game. Extra fields do not change damage.
-
-Optional string `id` values (up to 128 characters) suppress duplicates across the last 1,000 IDs in the current dashboard session. Invalid JSON, invalid types/sides and messages over 4 KB are rejected. Recovery drops attacks instead of queuing them. Disconnect is explicit; there is no automatic reconnect or persistent replay protection. The bridge must handle authentication, burst aggregation, provider reconnects and replay safely.
-
-**No real S2E payloads, TikTok comments, likes, gifts or account connection have been tested.** The included WebSocket tests use a synthetic local fixture. Native integration needs real event samples and end-to-end verification.
+Supported types: `vote`, `comment`, `like`, `gift`, `punch`, `special`. Sides: `blue`, `red`. In this test mode each vote/comment/like is one vote, gifts cause 12 damage, and specials cause 20. Optional string IDs (up to 128 characters) deduplicate the last 1,000 IDs. Generic test attacks retain the original recovery behavior (attacks during recovery are ignored). Select **TikFinity Desktop** for actual TikFinity messages.
 
 ## Verification
 
@@ -57,10 +69,11 @@ The included dependency-free tests require Node 22+ and Chromium with its debugg
 python -m http.server 8766 --bind 127.0.0.1
 python server.py --port 8767
 chromium --headless --remote-debugging-port=9222 --user-data-dir=/tmp/boxing-test-browser about:blank
+node tests/tikfinity.mjs
 node tests/browser.mjs
 node tests/relay.mjs
 ```
 
-`browser.mjs` closes existing test tabs at port 8766. It checks controls, recovery, saved-match reloads, voting, language sync, clipboard label preservation, expiry, mobile layout, synthetic WebSocket validation/deduplication and knockouts. It writes screenshots under `/tmp`. `relay.mjs` checks separate storage contexts and cross-site/stale/invalid write rejection. Tests do not exercise Windows batch execution or the Live Studio application.
+`browser.mjs` closes existing test tabs at port 8766. It checks controls, recovery, saved-match reloads, voting, language sync, clipboard label preservation, expiry, mobile layout, synthetic WebSocket validation/deduplication, native TikFinity chat/like/gift combos, queued damage, and knockouts. `tikfinity.mjs` tests the native adapter separately with flat/nested viewer payloads, batched likes and streak deduplication. It writes screenshots under `/tmp`. `relay.mjs` checks separate storage contexts and cross-site/stale/invalid write rejection. Tests do not exercise Windows batch execution or the Live Studio application.
 
 Manual release check: switch Hebrew → English; save custom fighter names and a valid portrait; open an external overlay; start a round; compare health, votes and timer across dashboard, preview and overlay; test special attacks and a knockout; restart the server using the Windows launcher; finally test the captured 9:16 source in Live Studio.
