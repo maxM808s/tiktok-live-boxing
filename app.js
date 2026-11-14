@@ -31,7 +31,7 @@ $("language").addEventListener("change",()=>{commit({language:$("language").valu
 $("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log("Preset selected — click Save settings to apply")};
 $("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").textContent=state.language==="he"?"✓ הועתק":"✓ Copied";setTimeout(()=>localize(),1800)}catch{window.prompt("Copy overlay URL:",url)}};
 function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+"s";$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueVotesStat").textContent=(state.language==="he"?"הצבעות לכחול: ":"Blue votes: ")+state.blueVotes;$("redVotesStat").textContent=(state.language==="he"?"הצבעות לאדום: ":"Red votes: ")+state.redVotes}
-setInterval(stats,150);stats();localize();
+setInterval(stats,150);stats();
 }
 
 
@@ -55,6 +55,7 @@ const updateTabLabels=()=>{const he=state.language==="he";document.querySelector
 const oldLocalize=localize;
 localize=function(){oldLocalize();updateTabLabels()};
 updateTabLabels();
+localize();
 }
 
 const canvas=$("arena");
