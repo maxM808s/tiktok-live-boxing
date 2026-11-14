@@ -52,7 +52,7 @@ The game accepts native `{event, data}` gift messages. The [official TikFinity E
 
 A connected socket confirms transport only; received events do not by themselves verify gift scoring. Adapter, Chromium WebSocket simulator and isolated-overlay tests have passed. **No real TikFinity desktop instance, live account or real gift transaction was tested here.** The existing desktop connection has no automatic reconnect; press Connect again after restoring TikFinity.
 
-The adapter accepts flat/nested sender fields and keeps the last 20,000 gift identities in memory. Gifts without a stable message or usable completed-combo identity are rejected. Replay protection does not survive dashboard reloads or guarantee protection after old IDs are evicted. Gift messages are limited to 256 KiB. Non-gift events are ignored completely.
+The adapter accepts flat/nested sender fields and persists both message and completed-combo identities in local browser storage. Gifts without a stable message or usable completed-combo identity are rejected. Native replay protection survives dashboard reloads and never silently evicts old identities: full, corrupt or unavailable replay storage rejects new native events and logs the issue. It is bounded to 40,000 keys / 1.5 million JSON characters; use one controller and never clear history during an active stream. Gift messages are limited to 256 KiB. Non-gift events are ignored completely. See [SECURITY.md](SECURITY.md) for the trust boundary and recovery notes.
 
 ### Advanced normalized test bridge
 
@@ -68,9 +68,9 @@ The developer bridge remains available under **Normalized test bridge (advanced)
 
 Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Otherwise open the overlay in a separate browser window and capture that window. Keep the dashboard private.
 
-`server.py` uses Python's standard library and binds only to `127.0.0.1`. The dashboard publishes state; overlays poll about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it owns the round timer. Loopback sources cannot be reached from another computer.
+`server.py` uses Python's standard library and binds only to `127.0.0.1`. It serves only allowlisted game files and rejects malformed state and cross-site writes; local applications remain trusted. The dashboard publishes state; overlays poll about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it owns the round timer. Loopback sources cannot be reached from another computer.
 
-Static hosting (`python -m http.server 8766`) retains same-profile BroadcastChannel/localStorage synchronization. Separate browser sources require `server.py`. Isolated Chromium profile synchronization was tested; Windows launcher execution, actual Live Studio capture and streaming performance still need testing on your PC.
+For isolated development only, static hosting (`python -m http.server 8766`) retains same-profile BroadcastChannel/localStorage synchronization. Separate browser sources require `server.py`; the static fallback does not provide the hardened server's file restrictions or security headers. Isolated Chromium profile synchronization was tested; Windows launcher execution, actual Live Studio capture and streaming performance still need testing on your PC.
 
 ## Custom fighters and languages
 
@@ -90,3 +90,7 @@ node tests/relay.mjs
 ```
 
 The tests verify catalog assets, exclusive damage/healing assignments, exact coin/combo math, non-gift rejection, duplicate prevention, rapid gifts, maximum healing, knockout rules, saved customization, RTL, mobile layout and separate-profile synchronization. Screenshots are written to `/tmp`. Browser tests close existing test tabs at port 8766; relay tests close test tabs at port 8767. Windows and actual Live Studio execution are not covered.
+
+## Security
+
+The security review and remaining limitations are documented in [SECURITY.md](SECURITY.md). After pulling these fixes, close the previous server window and restart **Start-Boxing.cmd** so the new server protections take effect. Native TikFinity connections must be local; remote developer bridges must use WSS. Portraits accept HTTP(S) addresses without embedded credentials. Run `node tests/security.mjs`, `python tests/security_server.py`, and the dedicated hardened-server Chromium checks described in that report.

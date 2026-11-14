@@ -6,7 +6,7 @@ export function createGiftRules(catalog){
   const out={},used=new Set();
   for(const side of ['blue','red']){
    const attacks=settings[side+'AttackGifts'];
-   if(!Array.isArray(attacks)||attacks.length>catalog.length)throw Error('Invalid gift assignment');
+   if(!Array.isArray(attacks)||attacks.length>catalog.length||typeof settings[side+'HealGift']!=='string')throw Error('Invalid gift assignment');
    for(const id of [...attacks,settings[side+'HealGift']||'']){
     if(id==='')continue;
     if(typeof id!=='string'||!gifts.has(id)||used.has(id))throw Error('Each gift can have only one assignment');

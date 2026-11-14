@@ -1,5 +1,6 @@
 import {createTikFinityAdapter} from "./tikfinity.mjs";
 import {createGiftRules,giftDefaults} from "./gift-rules.mjs";
+import {createStateValidator,safePortraitURL,safeSocketURL,MAX_STATE_BYTES} from "./security.mjs";
 const catalogResponse=await fetch("./catalog.json");
 if(!catalogResponse.ok)throw Error("Gift library could not load. Restart Start-Boxing.cmd and refresh.");
 const giftCatalog=await catalogResponse.json(),giftRules=createGiftRules(giftCatalog);
@@ -10,8 +11,10 @@ const originalLabels={};
 
 const KEY="boxing-arena-v1";
 const defaults={language:"en",blueName:"BIBI",redName:"EISENKOT",blueImage:"",redImage:"",duration:60,remaining:60,blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),phase:"ready",winner:null,startedAt:0,endsAt:0,action:null,revision:0};
+const normalizeState=createStateValidator(defaults,giftRules);
 function read(){try{
- const saved=JSON.parse(localStorage.getItem(KEY)||"{}");
+ const raw=localStorage.getItem(KEY)||"{}";if(new TextEncoder().encode(raw).length>MAX_STATE_BYTES)throw Error("State too large");
+ const saved=JSON.parse(raw);
  if(!saved||typeof saved!=="object"||Array.isArray(saved))return {...defaults};
  const next={...defaults,...saved};
  for(const field of ["duration","remaining","blueHp","redHp","blueVotes","redVotes","startedAt","endsAt","revision","blueCoins","redCoins"])if(!Number.isFinite(next[field])||next[field]<0)next[field]=defaults[field];
@@ -22,13 +25,15 @@ function read(){try{
  if(!["ready","running","finished"].includes(next.phase))next.phase="ready";
  if(next.action&&(!["blue","red"].includes(next.action.side)||!Number.isFinite(next.action.at)))next.action=null;
  try{Object.assign(next,giftRules.validate(next))}catch{Object.assign(next,giftDefaults())}
- next.blueVotes=0;next.redVotes=0;return next;
+ next.blueVotes=0;next.redVotes=0;
+ if(next.action&&(!Number.isSafeInteger(next.action.power)||!next.action.giftId))next.action=null;
+ return normalizeState(next);
  }catch{return {...defaults}}}
 let state=read();
 let giftDraft=giftRules.validate(state);
 const channel=typeof BroadcastChannel!=="undefined"?new BroadcastChannel(KEY):null;
-function commit(patch){state={...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)};try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
-function sync(next){if(next?.revision>=state.revision){state={...defaults,...next};localize();renderControls()}}
+function commit(patch){state=normalizeState({...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)});try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
+function sync(next){try{const verified=normalizeState(next);if(verified.revision>=state.revision){state=verified;localize();renderControls()}}catch{log(state.language==="he"?"מצב סנכרון לא תקין נדחה":"Invalid synchronized state rejected")}}
 channel&&(channel.onmessage=e=>sync(e.data));
 window.addEventListener("storage",e=>{if(e.key===KEY)sync(read())});
 const $=id=>document.getElementById(id);
@@ -39,7 +44,7 @@ function action(side,power,type="gift",details={}){
  if(Date.now()>=state.endsAt){finish();return}
  const healing=type==="heal",target=(healing?side:side==="blue"?"red":"blue")+"Hp";
  const hp=clamp(state[target]+(healing?power:-power),0,100),amount=Math.abs(hp-state[target]);
- const patch={[target]:hp,[side+"Coins"]:state[side+"Coins"]+power,action:{side,type,power,amount,giftId:details.giftId||"",name:details.name||"",at:Date.now(),id:crypto.randomUUID()}};
+ const patch={[target]:hp,[side+"Coins"]:Math.min(Number.MAX_SAFE_INTEGER,state[side+"Coins"]+power),action:{side,type,power,amount,giftId:details.giftId||"",name:details.name||"",at:Date.now(),id:crypto.randomUUID()}};
  if(!healing&&hp===0){patch.winner=side;patch.phase="finished";patch.remaining=Math.max(0,Math.ceil((state.endsAt-Date.now())/1000))}
  commit(patch);
  log((state.language==="he"?(side==="blue"?"כחול":"אדום"):side)+" · "+(details.name||"gift")+" · "+power+(state.language==="he"?" מטבעות":" coins")+" ("+(healing?"+":"−")+amount+" HP)");
@@ -54,13 +59,14 @@ function reset(){commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes
 function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?"draw":state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[winner]):"Round finished: "+winner)}
 function renderControls(){if(!$("save"))return;localize();refreshStats();refreshGiftControls();document.querySelectorAll("[data-test-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=state.phase==="running";const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
 if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration"]){$(field).value=state[field];}
-$("save").onclick=()=>{const patch=giftRules.validate(giftDraft);for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(state.phase!=="running")patch.remaining=patch.duration;$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
+$("save").onclick=()=>{const patch=giftRules.validate(giftDraft);for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();if(!safePortraitURL(patch.blueImage)||!safePortraitURL(patch.redImage)){log(state.language==="he"?"יש להזין כתובת תמונה תקינה מסוג HTTP(S), ללא פרטי כניסה":"Use valid HTTP(S) portrait URLs without embedded credentials");return}patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(state.phase!=="running")patch.remaining=patch.duration;$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
 $("start").onclick=start;$("reset").onclick=reset;
 document.querySelectorAll("[data-test-gift]").forEach(b=>b.onclick=()=>{
  const id=$(b.dataset.testGift+"TestGift").value;if(id)applyGift(id);
 });
 let ws=null,received=0;
-const adapter=createTikFinityAdapter(),seen=new Set();
+let replayStorage;try{replayStorage=localStorage}catch{}
+const adapter=createTikFinityAdapter({storage:replayStorage,requirePersistence:true}),seen=new Set();
 $("bridgeMode").value="tikfinity";
 $("wsUrl").value="ws://localhost:21213/";
 $("bridgeMode").onchange=()=>{if(ws){const previous=ws;ws=null;previous.close()}received=0;$("wsUrl").value=$("bridgeMode").value==="tikfinity"?"ws://localhost:21213/":"ws://127.0.0.1:8765/";bridgeStatus(false)};
@@ -77,14 +83,14 @@ function bridgeStatus(connected){
 $("connect").onclick=()=>{
  if(ws){const previous=ws;ws=null;previous.close();bridgeStatus(false);return}
  const url=$("wsUrl").value.trim();
- try{const parsed=new URL(url);if(!["ws:","wss:"].includes(parsed.protocol))throw Error();}catch{log(state.language==="he"?"יש להזין כתובת ws:// או wss://":"Enter a ws:// or wss:// URL");return}
+ if(!safeSocketURL(url,{localOnly:$("bridgeMode").value==="tikfinity"})){log(state.language==="he"?"TikFinity דורש כתובת מקומית ללא פרטי כניסה; חיבור מרוחק דורש WSS":"Use a loopback TikFinity URL without credentials; remote test bridges require WSS");return}
  try{
  const socket=new WebSocket(url);ws=socket;received=0;bridgeStatus(false);
  socket.onopen=()=>{if(ws===socket){bridgeStatus(true);log($("bridgeMode").value==="tikfinity"?"TikFinity socket connected — awaiting events":"Test bridge connected")}};
  socket.onclose=()=>{if(ws===socket){ws=null;bridgeStatus(false)}};
  socket.onerror=()=>{if(ws===socket)log("Bridge error")};
  socket.onmessage=e=>{if(ws!==socket)return;try{
- if(typeof e.data!=="string"||e.data.length>262144)throw Error();
+ if(typeof e.data!=="string"||new TextEncoder().encode(e.data).length>262144)throw Error();
  const event=JSON.parse(e.data);
  if($("bridgeMode").value==="tikfinity"){
   const actions=adapter.receive(event);received++;bridgeStatus(true);
@@ -96,7 +102,7 @@ $("connect").onclick=()=>{
  if(!/^\d{1,20}$/.test(String(event.giftId)))throw Error();
  if(event.id!==undefined){if(typeof event.id!=="string"||event.id.length>128)throw Error();if(seen.has(event.id))return;seen.add(event.id);if(seen.size>1000)seen.delete(seen.values().next().value)}
  applyGift(event.giftId,event.count??1);
- }catch{log(state.language==="he"?"אירוע לא תקין נדחה":"Invalid event rejected")}};
+ }catch(error){log(error?.code==="REPLAY_STORAGE"?(state.language==="he"?"הגנת שידור חוזר חסומה: אחסון הדפדפן מלא, פגום או לא זמין":"Gift replay protection blocked: browser storage is full, corrupt or unavailable"):(state.language==="he"?"אירוע לא תקין נדחה":"Invalid event rejected"))}};
  }catch{ws=null;bridgeStatus(false);log("Connection failed")}
 };
 // Recompute connection text when the UI language changes.
@@ -185,7 +191,7 @@ function line(points,color,width=5){ctx.beginPath();ctx.moveTo(...points[0]);for
 function box(x,y,w,h,color,r=0){ctx.fillStyle=color;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
 function txt(t,x,y,size=24,color="#fff",align="center"){const hebrew=/[\u0590-\u05FF]/.test(String(t));ctx.font=(hebrew?"800 ":"900 ")+size+"px "+(hebrew?'"Rubik",Arial,sans-serif':'"Barlow Condensed","Rubik",Arial,sans-serif');ctx.direction=hebrew?"rtl":"ltr";ctx.textAlign=align;ctx.lineWidth=4;ctx.strokeStyle="#071027";ctx.strokeText(String(t),x,y);ctx.fillStyle=color;ctx.fillText(String(t),x,y)}
 function glow(x,y,r,color){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,color);g.addColorStop(1,"transparent");ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2)}
-function portrait(side,url){if(url===urls[side])return;urls[side]=url;portraits[side]=new Image();if(/^https?:\/\//.test(url))portraits[side].src=url}
+function portrait(side,url){if(url===urls[side])return;urls[side]=url;portraits[side]=new Image();portraits[side].referrerPolicy="no-referrer";if(safePortraitURL(url)&&url)portraits[side].src=url}
 function burst(x,y,side,special){for(let i=0;i<(special?40:18);i++){const a=rnd(0,Math.PI*2),speed=rnd(2,special?14:9);particles.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed,life:rnd(16,35),max:35,r:rnd(2,special?8:5),color:i%3===0?"#fff":side==="blue"?"#65d7ff":"#ffb44b"})}}
 function limb(a,b,c,color,edge,w){line([a,b,c],edge,w+7);line([a,b,c],color,w)}
 function fighter(x,y,side,t){
@@ -327,15 +333,15 @@ if($("save"))setInterval(()=>{if(state.phase==="running"&&Date.now()>=state.ends
 (async function relay(){
  let available=false,publishing=Promise.resolve();
  const controller=!!$("save");
- async function readRelay(){const response=await fetch("./api/state",{cache:"no-store",signal:AbortSignal.timeout(2000)});if(!response.ok)throw Error();const body=await response.json();if(body.protocol!==KEY)throw Error();return body.state}
+ async function readRelay(){const response=await fetch("./api/state",{cache:"no-store",signal:AbortSignal.timeout(2000)});if(!response.ok)throw Error();const body=await response.json();if(body.protocol!==KEY)throw Error();return body.state===null?null:normalizeState(body.state)}
  try{
  const remote=await readRelay();available=true;
  if(controller){
  publishState=next=>{const snapshot=JSON.stringify(next);publishing=publishing.catch(()=>{}).then(async()=>{
- const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json"},body:snapshot,signal:AbortSignal.timeout(2000)});
+ const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json","X-Boxing-Request":"1"},body:snapshot,signal:AbortSignal.timeout(2000)});
  if(!response.ok)throw Error("Relay refused state");
  }).catch(()=>log(state.language==="he"?"סנכרון מקומי נכשל — בדקו שהשרת פתוח":"Local relay sync failed — check the server"))};
- if(remote){state={...defaults,...remote};renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration"])$(field).value=state[field];refreshGiftControls(true);}
+ if(remote){state=normalizeState(remote);renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration"])$(field).value=state[field];refreshGiftControls(true);}
  else publishState(state);
  }else if(remote)sync(remote);
  }catch{return}
