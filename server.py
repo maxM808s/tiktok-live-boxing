@@ -52,6 +52,9 @@ def validate_state(value):
     if not keys.issubset(value):
         raise ValueError('Missing state fields')
     out = {key: value[key] for key in keys}
+    out['giftInfoPosition'] = value.get('giftInfoPosition', 'bottom')
+    if out['giftInfoPosition'] not in ('bottom', 'aboveNames'):
+        raise ValueError('Invalid gift information position')
     if out['language'] not in ('en', 'he') or out['phase'] not in ('ready', 'running', 'finished'):
         raise ValueError('Invalid flags')
     if out['winner'] not in (None, 'blue', 'red', 'draw') or (out['phase'] == 'finished') != bool(out['winner']):

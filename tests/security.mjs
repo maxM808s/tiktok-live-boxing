@@ -4,10 +4,10 @@ import {createStateValidator,safePortraitURL,safeSocketURL} from '../security.mj
 import {createGiftRules,giftDefaults} from '../gift-rules.mjs';
 import {createTikFinityAdapter} from '../tikfinity.mjs';
 const catalog=JSON.parse(await readFile(new URL('../catalog.json',import.meta.url),'utf8'));
-const defaults={language:'en',blueName:'BIBI',redName:'EISENKOT',blueImage:'',redImage:'',duration:60,remaining:60,blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),phase:'ready',winner:null,startedAt:0,endsAt:0,action:null,revision:0};
+const defaults={language:'en',blueName:'BIBI',redName:'EISENKOT',blueImage:'',redImage:'',duration:60,remaining:60,giftInfoPosition:'bottom',blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),phase:'ready',winner:null,startedAt:0,endsAt:0,action:null,revision:0};
 const validate=createStateValidator(defaults,createGiftRules(catalog));
 assert.deepEqual(validate(defaults),defaults);
-for(const patch of [{blueName:{}},{blueName:'\ud800'},{blueName:'😀'.repeat(14)},{blueImage:'javascript:alert(1)'},{blueImage:'https://user:secret@example.com/a.png'},{blueHp:101},{redCoins:Infinity},{revision:Number.MAX_SAFE_INTEGER},{blueAttackGifts:{}},{blueAttackGifts:['99999999']},{redHealGift:'5655'},{action:{side:'blue',type:'gift',at:0}},{winner:'blue'},{phase:'running'}])assert.throws(()=>validate({...defaults,...patch}));
+for(const patch of [{giftInfoPosition:'untrusted'},{blueName:{}},{blueName:'\ud800'},{blueName:'😀'.repeat(14)},{blueImage:'javascript:alert(1)'},{blueImage:'https://user:secret@example.com/a.png'},{blueHp:101},{redCoins:Infinity},{revision:Number.MAX_SAFE_INTEGER},{blueAttackGifts:{}},{blueAttackGifts:['99999999']},{redHealGift:'5655'},{action:{side:'blue',type:'gift',at:0}},{winner:'blue'},{phase:'running'}])assert.throws(()=>validate({...defaults,...patch}));
 assert(!Object.hasOwn(validate({...defaults,__untrusted:'stripped'}),'__untrusted'));
 assert.throws(()=>validate({...defaults,blueName:'x'.repeat(20000)}));
 for(const url of ['','https://example.com/a.png','http://127.0.0.1/a.png'])assert(safePortraitURL(url));

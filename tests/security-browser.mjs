@@ -11,7 +11,7 @@ let id=0;const pending=new Map(),errors=[];
 ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){pending.get(m.id)?.(m);pending.delete(m.id)}if(m.method==='Runtime.exceptionThrown')errors.push(m.params.exceptionDetails)};
 const call=(method,params={})=>new Promise((resolve,reject)=>{const seq=++id;pending.set(seq,m=>m.error?reject(m.error):resolve(m.result));ws.send(JSON.stringify({id:seq,method,params}))});
 const evaluate=async expression=>{const r=await call('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value};
-await call('Runtime.enable');await call('Page.enable');await pause(1000);
+await call('Runtime.enable');await call('Page.enable');await call('Page.bringToFront');await pause(1000);
 await evaluate('localStorage.clear();location.reload()');await pause(1000);await evaluate('document.querySelector("#reset").click()');
 assert.equal(await evaluate('document.querySelectorAll(".gift-card").length'),154,'modules work under CSP/nosniff');
 assert.equal(await evaluate('!!document.querySelector("iframe").contentDocument.querySelector("canvas")'),true,'same-origin overlay preview works under frame restrictions');
@@ -34,7 +34,7 @@ await new Promise(r=>bridge.listen(0,'127.0.0.1',r));const port=bridge.address()
 const connect=()=>evaluate(`document.querySelector('#wsUrl').value='ws://127.0.0.1:${port}/';document.querySelector('#connect').click()`);
 function sendGift(){const data=Buffer.from(JSON.stringify({event:'gift',data:{giftId:'5655',giftType:0,repeatCount:1,msgId:'security-reload-gift'}}));const head=data.length<126?Buffer.from([0x81,data.length]):Buffer.from([0x81,126,data.length>>8,data.length&255]);socket.write(Buffer.concat([head,data]))}
 await evaluate(`document.querySelector('#reset').click();document.querySelector('#blueImage').value='http://127.0.0.1:${port}/portrait.webp';document.querySelector('#save').click();document.querySelector('#start').click()`);
-await pause(300);assert.equal(portraitReferer,undefined,'portrait requests do not disclose the dashboard referrer');
+for(let attempt=0;attempt<40&&portraitReferer==='not requested';attempt++)await pause(100);assert.equal(portraitReferer,undefined,'portrait requests do not disclose the dashboard referrer');
 await connect();await pause(200);sendGift();await pause(200);
 assert.equal(await evaluate('JSON.parse(localStorage.getItem("boxing-arena-v1")).redHp'),99);
 await evaluate('location.reload()');await pause(1000);await connect();await pause(200);sendGift();await pause(200);

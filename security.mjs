@@ -18,6 +18,7 @@ export function createStateValidator(defaults,giftRules){
   const encoded=JSON.stringify(value);if(new TextEncoder().encode(encoded).length>MAX_STATE_BYTES)throw Error('State too large');
   const out={};for(const key of Object.keys(defaults))out[key]=value[key]??defaults[key];
   if(!['en','he'].includes(out.language)||!['ready','running','finished'].includes(out.phase)||![null,'blue','red','draw'].includes(out.winner))throw Error('Invalid match flags');
+  if(!['bottom','aboveNames'].includes(out.giftInfoPosition))throw Error('Invalid gift information position');
   if((out.phase==='finished')!==!!out.winner)throw Error('Invalid winner');
   for(const side of ['blue','red']){
    if(!validText(out[side+'Name'])||out[side+'Name'].length>26||!safePortraitURL(out[side+'Image']))throw Error('Invalid fighter');

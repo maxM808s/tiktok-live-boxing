@@ -20,7 +20,7 @@ In **Match setup → Gift library & healing**:
 
 1. Choose an assignment: **Blue · damage opponent**, **Red · damage opponent**, **Blue · healing gift**, or **Red · healing gift**.
 2. Search the catalog by name, gift ID or coin value. Click a gift to assign it. Click it again in the same assignment to remove it.
-3. Assign as many different damage gifts as desired, and optionally **one healing gift per fighter**. Choosing a new healing gift replaces that fighter's previous healing gift.
+3. Choose **one healing gift per fighter** from the two prominent healing selectors above the library, with an icon preview. You can also use the library assignment menu. Choose as many different damage gifts as desired. A new healing gift replaces that fighter's previous healing gift.
 4. Each gift has one assignment across the whole game. Assigning an already-used gift moves it to the new slot; it cannot damage and heal, or support both fighters, at the same time.
 5. Press **Save settings**. Unsaved selections remain a draft. Saved changes affect subsequent gifts immediately, including during a round.
 
@@ -38,7 +38,7 @@ Defaults: **Rose** supports blue and damages red; **TikTok** supports red and da
 - At zero health, the opponent wins and the loser animates into a knockout. Finished rounds cannot be healed or damaged. Start or Reset clears health and received-coin totals; gift assignments remain saved.
 - At the round deadline, remaining health decides the winner. Equal health is a draw; votes and received-coin totals never break ties. Received-coin totals are informational and include healing gifts.
 
-The overlay shows the assigned gift icons: **⚔** marks gifts that damage the opponent and **♥** marks the fighter's healing gift. It shows up to three damage icons per fighter and a count for additional assignments. Green healing effects are distinct from punch reactions.
+The overlay labels assigned gifts **Punch / אגרוף** and **Heal / ריפוי**, directly beside their icons. In Match setup, **Punch & healing information position** switches the gift information between the bottom of the screen and above the fighter names. Placement updates immediately, persists across reloads and synchronizes with isolated browser sources. The old coin-ratio banner and sword/heart legend are removed. Up to three punch gifts are shown, with a count for additional assignments. Green healing effects remain distinct from punch reactions.
 
 ## TikFinity Desktop
 
@@ -74,7 +74,7 @@ For isolated development only, static hosting (`python -m http.server 8766`) ret
 
 ## Custom fighters and languages
 
-Custom fighter names, remote HTTP(S) portraits, presets, round duration and bilingual controls remain available. Built-in Bibi/Netanyahu and Eisenkot caricatures are procedural Canvas fighters. Failed portraits fall back to a built-in face. Hebrew supports RTL layout while technical addresses stay LTR. Tabs support arrow keys, Home and End. The one-click Windows launcher is preserved.
+Bibi now has a taller, narrower silhouette, angular face, hooded eyes, long nose, gold-trimmed kit and high laced boxing boots. Eisenkot has a broader build, rounded cheeks, wider jaw, heavier arms, silver-trimmed kit and lower, wider burgundy boots. Both keep the chest-level guard and articulated punch/knockout animation. Custom fighter names, remote HTTP(S) portraits, presets, round duration and bilingual controls remain available. Built-in Bibi/Netanyahu and Eisenkot caricatures are procedural Canvas fighters. Failed portraits fall back to a built-in face. Hebrew supports RTL layout while technical addresses stay LTR. Tabs support arrow keys, Home and End. The one-click Windows launcher is preserved.
 
 ## Verification
 
@@ -94,3 +94,5 @@ The tests verify catalog assets, exclusive damage/healing assignments, exact coi
 ## Security
 
 The security review and remaining limitations are documented in [SECURITY.md](SECURITY.md). After pulling these fixes, close the previous server window and restart **Start-Boxing.cmd** so the new server protections take effect. Native TikFinity connections must be local; remote developer bridges must use WSS. Portraits accept HTTP(S) addresses without embedded credentials. Run `node tests/security.mjs`, `python tests/security_server.py`, and the dedicated hardened-server Chromium checks described in that report.
+
+Appearance/layout regression: run `node tests/appearance.mjs` against the static development fixture and dedicated Chromium debug profile. It checks direct healing selection, exclusive assignment, Hebrew/English placement updates, persistence and external overlay synchronization, and writes screenshots for both positions under `/tmp`.
