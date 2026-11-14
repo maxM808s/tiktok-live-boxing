@@ -25,6 +25,14 @@ document.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>vote(b.dataset
 document.querySelectorAll("[data-gift]").forEach(b=>b.onclick=()=>action(b.dataset.gift,12,"gift"));
 let ws=null;$("connect").onclick=()=>{if(ws)ws.close();const url=$("wsUrl").value.trim();if(!/^wss?:\/\//.test(url)){log("Enter a ws:// or wss:// URL");return}try{ws=new WebSocket(url);ws.onopen=()=>{const e=$("status");e.textContent="Bridge connected";e.dataset.connected="1";log("Bridge connected")};ws.onclose=()=>{const e=$("status");e.textContent="Bridge disconnected";delete e.dataset.connected};ws.onerror=()=>log("Bridge error");ws.onmessage=e=>{try{const event=JSON.parse(e.data);if(!["vote","gift","punch","special"].includes(event.type)||!["blue","red"].includes(event.side))return;if(event.type==="vote")vote(event.side);else action(event.side,event.type==="special"?20:event.type==="gift"?12:6,event.type)}catch{log("Invalid event received")}}}catch{log("Connection failed")}}}
 
+
+if($("preset")){
+$("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log("Preset selected — click Save settings to apply")};
+$("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").textContent="✓ Copied";setTimeout(()=>$("copyOverlay").textContent="Copy overlay URL",1800)}catch{window.prompt("Copy overlay URL:",url)}};
+function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.phase.toUpperCase();$("timeStat").textContent=remaining+"s";$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueVotesStat").textContent="Blue votes: "+state.blueVotes;$("redVotesStat").textContent="Red votes: "+state.redVotes}
+setInterval(stats,150);stats();
+}
+
 const canvas=$("arena");
 if(canvas){
 const ctx=canvas.getContext("2d");
