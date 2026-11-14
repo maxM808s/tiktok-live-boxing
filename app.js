@@ -15,7 +15,7 @@ function vote(side){if(state.phase!=="running")return;const field=side+"Votes";c
 function start(){const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log("Round started")}
 function reset(){commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log("Reset")}
 function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?(state.blueVotes===state.redVotes?"draw":state.blueVotes>state.redVotes?"blue":"red"):state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log("Round finished: "+winner)}
-function renderControls(){if(!$("save"))return;const status=$("status");if(status&&!status.dataset.connected)status.textContent="Demo mode · no live connection"}
+function renderControls(){if(!$("save"))return;localize();const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
 if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration"]){$(field).value=state[field];}
 $("save").onclick=()=>{const patch={};for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();patch.duration=clamp(Number($("duration").value)||60,15,300);commit(patch);log("Settings saved")};
 $("start").onclick=start;$("reset").onclick=reset;
@@ -27,10 +27,22 @@ let ws=null;$("connect").onclick=()=>{if(ws)ws.close();const url=$("wsUrl").valu
 
 
 if($("preset")){
+$("language").addEventListener("change",()=>{commit({language:$("language").value})});
 $("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log("Preset selected — click Save settings to apply")};
-$("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").textContent="✓ Copied";setTimeout(()=>$("copyOverlay").textContent="Copy overlay URL",1800)}catch{window.prompt("Copy overlay URL:",url)}};
-function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.phase.toUpperCase();$("timeStat").textContent=remaining+"s";$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueVotesStat").textContent="Blue votes: "+state.blueVotes;$("redVotesStat").textContent="Red votes: "+state.redVotes}
-setInterval(stats,150);stats();
+$("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").textContent=state.language==="he"?"✓ הועתק":"✓ Copied";setTimeout(()=>localize(),1800)}catch{window.prompt("Copy overlay URL:",url)}};
+function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+"s";$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueVotesStat").textContent=(state.language==="he"?"הצבעות לכחול: ":"Blue votes: ")+state.blueVotes;$("redVotesStat").textContent=(state.language==="he"?"הצבעות לאדום: ":"Red votes: ")+state.redVotes}
+setInterval(stats,150);stats();localize();
+}
+
+
+const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת מסך השידור 9:16","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור אירועים","התחברות","מצב הדגמה · אין חיבור לשידור חי","החיבור ל־S2E עדיין לא נבדק. כרגע ניתן לקבל אירועי בדיקה בפורמט JSON בלבד.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
+const originalLabels={};
+function localize(){
+const hebrew=state.language==="he";
+document.documentElement.lang=hebrew?"he":"en";
+document.documentElement.dir=hebrew?"rtl":"ltr";
+document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;if(!(key in originalLabels))originalLabels[key]=el.textContent;const n=Number(key.slice(1))-1;el.textContent=hebrew?(translationsHe[n]||originalLabels[key]):originalLabels[key]});
+const status=$("status");if(status&&!status.dataset.connected)status.textContent=hebrew?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection";
 }
 
 const canvas=$("arena");
@@ -125,7 +137,7 @@ for(let i=0;i<3;i++)line([[0,539+i*53],[W,539+i*53]],"#bed7f3",5);
 path([[0,754],[W,754],[W,818],[0,818]],"#90a9cb","#162b49",5);
 for(let i=0;i<11;i++)line([[i*54,754],[i*54+25,818]],"#b9c9dc44",2);
 box(0,0,W,95,"#071127");
-txt("🥊 LIVE BOXING ARENA",270,58,27,"#f4f7ff");
+txt(state.language==="he"?"🥊 זירת האגרוף":"🥊 LIVE BOXING ARENA",270,58,27,"#f4f7ff");
 txt(state.language==="he"?"הקרב הגדול":"MAIN EVENT",270,142,26,"#ffe3a0");
 for(const side of ["blue","red"]){const left=side==="blue",x=left?22:282,hp=state[side+"Hp"],name=state[side+"Name"];
 box(x,169,236,107,"#0b1730",14);box(x+10,218,216,24,"#263754",7);
@@ -138,10 +150,10 @@ fighter(165,590,"blue",t);fighter(377,590,"red",t);
 if(state.action&&Date.now()-state.action.at<660){const a=state.action,age=Date.now()-a.at,impact=clamp((age-140)/150,0,1);
 if(age>140&&age<440){const x=a.side==="blue"?310:230,y=a.type==="special"?485:524;glow(x,y,110*(1-impact*.5),a.side==="blue"?"#38aaff99":"#ff5b6799");txt(a.type==="special"?"✦ BOOM! ✦":"✦",x,y,age<290?40:25,"#fff0b3")}}
 box(20,840,500,91,"#071329",16);
-txt("🔵 "+state.blueVotes+"   VOTES   "+state.redVotes+" 🔴",270,875,22);
+txt("🔵 "+state.blueVotes+(state.language==="he"?"   הצבעות   ":"   VOTES   ")+state.redVotes+" 🔴",270,875,22);
 txt(state.language==="he"?"כתבו 1 או 2 כדי להצביע":"COMMENT 1 OR 2 TO VOTE",270,907,18,"#b5d5ff");
 if(state.phase!=="running"){box(45,396,450,83,"#071329e8",18);
-const result=state.phase==="finished"?(state.winner==="draw"?"DRAW!":(state.winner==="blue"?state.blueName:state.redName)+" WINS!"):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?");
+const result=state.phase==="finished"?(state.winner==="draw"?(state.language==="he"?"תיקו!":"DRAW!"):(state.winner==="blue"?state.blueName:state.redName)+(state.language==="he"?" ניצח!":" WINS!")):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?");
 txt(result.slice(0,23),270,449,30,"#ffe69b")}
 }
 let lastFrame=0;
