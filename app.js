@@ -261,12 +261,12 @@ ellipse(-29,-57,6,10,"#ca896c");line([[-30,-61],[-27,-55],[-30,-52]],"#a26753",2
 line([[-17,-44],[-11,-39]],"#bc8066",2);
 line([[-12,-27],[4,-24],[17,-27]],"#f5c3a1",2);
 ctx.restore();
-// rear guard
-limb([-27,-13],[-49,-33],[-30,-67],"#e6a37d","#14203a",16);
-ellipse(-28,-66,21,20,dark);ellipse(-33,-72,9,6,light);box(-42,-56,29,10,"#e1e8f2",3);
+// Chest-level guard: tucked elbows and gloves in front of the upper torso.
+limb([-27,-13],[-33,28],[-6,-9],"#e6a37d","#14203a",16);
+ellipse(-6,-9,21,20,dark);ellipse(-11,-15,9,6,light);box(-20,1,29,10,"#e1e8f2",3);
 // front arm: shoulder -> elbow -> glove, jab/uppercut
-const elbow=[mix(37,62,punch),mix(-10,-42,punch)];
-const glove=[mix(53,123,punch),victory?-118:mix(-50,special?-105:-62,punch)];
+const elbow=[mix(36,62,punch),victory?-56:mix(30,-42,punch)];
+const glove=[mix(43,123,punch),victory?-118:mix(-10,special?-105:-62,punch)];
 limb([29,-15],elbow,glove,"#e6a37d","#14203a",17);
 ctx.save();ctx.translate(...glove);ctx.rotate(-.18-punch*.35);
 ellipse(0,0,23,21,main);box(-18,7,30,12,dark,5);ellipse(7,-7,10,7,light);line([[-13,-11],[-2,-16],[9,-13]],"#ffffff60",2);box(-16,11,26,7,"#e1e8f2",2);ctx.restore();
