@@ -66,10 +66,36 @@ box(-32,51,64,9,"#f5d37d",3);
 path([[-22,-26],[0,-17],[13,32],[-12,29]],"#ffffff24");
 ellipse(0,-56,34,38,"#d89c78");
 ellipse(-5,-62,32,30,"#efb58d");
-// head guard / hair
-path([[-34,-67],[-25,-91],[0,-99],[24,-91],[31,-72],[10,-79],[-14,-79]],"#1b2037","#11172a",3);
-const img=portraits[side];if(img.complete&&img.naturalWidth){ctx.save();ctx.beginPath();ctx.ellipse(-2,-59,30,33,0,0,Math.PI*2);ctx.clip();ctx.drawImage(img,-32,-92,60,66);ctx.restore()}
-else{ellipse(15,-60,3,4,"#202034");line([[13,-39],[23,-40]],"#7b4b41",2)}
+// Distinct caricature presets: Bibi has a full swept silver hairstyle,
+// Eisenkot has a short grey buzz cut and a broader, squarer jaw.
+const name=String(state[side+"Name"]||"").toLowerCase();
+const bibi=/bibi|netanyahu|ביבי|נתניהו/.test(name);
+const eisenkot=/eisenkot|איזנקוט|אייזנקוט/.test(name);
+const img=portraits[side];
+if(img.complete&&img.naturalWidth){
+ ctx.save();ctx.beginPath();ctx.ellipse(-2,-59,31,35,0,0,Math.PI*2);ctx.clip();ctx.drawImage(img,-34,-94,64,70);ctx.restore();
+}else if(bibi){
+ ellipse(-4,-59,32,37,"#e7ad8c");
+ // Silver side-swept hair, high forehead, heavy brows and prominent nose
+ path([[-35,-70],[-34,-89],[-18,-102],[10,-104],[30,-92],[30,-77],[11,-87],[-5,-83],[-20,-73]],"#b9c2ce","#283248",3);
+ path([[-25,-94],[-5,-99],[17,-95],[28,-86]],null,"#eef2f7",4);
+ line([[4,-64],[19,-67]],"#44342f",5);ellipse(17,-58,3,3,"#202337");
+ path([[22,-58],[29,-43],[20,-41]],"#d28c6e","#8b5549",2);
+ line([[7,-32],[23,-33]],"#8c4e47",2);
+ line([[0,-73],[19,-74]],"#aa735e",2);
+}else if(eisenkot){
+ ellipse(-4,-57,35,39,"#c89170");
+ // Close-cropped salt-and-pepper hair and pronounced square jaw
+ path([[-37,-73],[-31,-94],[-11,-99],[15,-97],[32,-85],[33,-71],[17,-85],[-8,-86],[-27,-78]],"#85888a","#283044",3);
+ for(let i=0;i<7;i++)line([[-24+i*7,-88-Math.sin(i)*3],[-21+i*7,-90-Math.sin(i)*3]],"#c7c7c5",2);
+ line([[2,-65],[21,-67]],"#4d403c",6);ellipse(19,-57,3,3,"#222331");
+ path([[24,-58],[30,-44],[20,-43]],"#c18a6d","#855f50",2);
+ line([[6,-32],[26,-32]],"#70463d",3);
+ line([[0,-74],[22,-75]],"#8c6253",2);
+}else{
+ path([[-34,-67],[-25,-91],[0,-99],[24,-91],[31,-72],[10,-79],[-14,-79]],"#1b2037","#11172a",3);
+ ellipse(15,-60,3,4,"#202034");line([[13,-39],[23,-40]],"#7b4b41",2);
+}
 // rear guard
 limb([-27,-13],[-49,-33],[-30,-67],"#e6a37d","#14203a",16);
 ellipse(-28,-66,21,20,dark);
