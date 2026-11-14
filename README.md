@@ -1,69 +1,84 @@
 # 🥊 TikTok LIVE Boxing Arena
 
-A local browser boxing game with a bilingual control dashboard and a 9:16 overlay. **TikFinity protocol support is implemented and simulator-tested. A real TikFinity/TikTok LIVE session still needs verification on your PC.**
+A local browser boxing game with a Hebrew/English dashboard, animated fighters and a 9:16 overlay. **Only gifts affect gameplay.** TikFinity protocol support is simulator-tested; a real TikFinity LIVE session still needs verification on your PC.
 
 ## Run on Windows
 
-1. In GitHub Desktop, select this repository and choose **Fetch origin → Pull origin** on `main`.
-2. Close any previous arena server window, then double-click **Start-Boxing.cmd**. Python 3 must be installed; no additional packages are required.
-3. Open http://127.0.0.1:8766/index.html if the dashboard does not open automatically. Keep its server window and one dashboard open while streaming.
-4. In **Match setup**, choose a preset, edit fighter names or portrait URLs, select English/עברית and a 15–300 second duration, then **Save settings**.
-5. In **Live control**, start a round. Try punches, specials, simulated comments and gifts. Reset to clear the match.
+1. In GitHub Desktop, choose **Fetch origin → Pull origin** on `main`.
+2. Close the previous arena server window, then double-click **Start-Boxing.cmd**. Python 3 is required; no additional packages are needed.
+3. Open http://127.0.0.1:8766/index.html if it does not open automatically. Keep one dashboard and the server window open while streaming.
+4. Open **Match setup**, customize fighters and select English/עברית, round duration and gift assignments. Press **Save settings**.
+5. Start a round in **Live control**. Its gift simulation buttons use the exact same assignments and coin values as TikFinity, without sending real gifts.
 
-The Windows launcher retains the existing Python detection, local port and one-click workflow. It now runs `server.py` to synchronize isolated browser sessions. On other systems run `python server.py` from this folder.
+The Windows launcher retains its one-click workflow, Python detection and local port. It runs `server.py` for cross-browser synchronization. On other systems run `python server.py`.
 
-## TikTok Live Studio
+## Gift library and assignments
 
-Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Otherwise open **Open 9:16 overlay** and capture that browser window. Keep the dashboard private.
+The bundled **154-gift catalog and all 154 local icons** come from your [TikTok LIVE Battle repository](https://github.com/maxM808s/tiktok-live-battle). `catalog.json` retains its gift IDs, names, coin values, image paths, source URLs and verification metadata. Gift assets are copied locally, so the picker does not depend on remote image hosts. Source catalog blob: `0abfbc85564fc79c4ad17a7dfe9f17d2ad6848e2`; source tree: `2f1e8a77388ed3a3231974c38fd962d5f7bec811`.
 
-The local relay shares state even when the overlay uses a separate browser profile. The canvas is 540×960 and scales to the source size. This transport was tested with isolated Chromium profiles; actual Live Studio capture, Windows execution and performance must still be checked on your PC. A browser source cannot reach this loopback URL from a different computer.
+In **Match setup → Gift library & healing**:
 
-## Controls and rules
+1. Choose an assignment: **Blue · damage opponent**, **Red · damage opponent**, **Blue · healing gift**, or **Red · healing gift**.
+2. Search the catalog by name, gift ID or coin value. Click a gift to assign it. Click it again in the same assignment to remove it.
+3. Assign as many different damage gifts as desired, and optionally **one healing gift per fighter**. Choosing a new healing gift replaces that fighter's previous healing gift.
+4. Each gift has one assignment across the whole game. Assigning an already-used gift moves it to the new slot; it cannot damage and heal, or support both fighters, at the same time.
+5. Press **Save settings**. Unsaved selections remain a draft. Saved changes affect subsequent gifts immediately, including during a round.
 
-- Punch: 6 damage; every third vote: 4 damage; gift: 12; special: 20.
-- Attacks share a 660 ms recovery period. Manual and normalized test attacks during recovery are ignored; their votes still count. Native TikFinity attacks queue through recovery, subject to the limits below.
-- At zero health the loser animates into a knockout. At the time limit, health decides the winner, then votes break ties. A points loss leaves the fighter standing.
-- Start is disabled during a running round; Reset ends it. Settings saved during a round change its next duration, not the current deadline.
-- Built-in procedural arcade caricatures recognize Bibi/Netanyahu and Eisenkot in English/Hebrew. Custom names and HTTP(S) portrait URLs remain supported; unavailable portraits fall back to the built-in face. These are Canvas vector fighters, not commissioned sprite artwork.
-- Hebrew covers controls, presets, status, event logs and overlay text, with RTL layout and LTR technical URLs. Tabs support arrow keys, Home and End.
+Defaults: **Rose** supports blue and damages red; **TikTok** supports red and damages blue. Healing is disabled until a healing gift is selected. Unassigned or unknown gifts are ignored and logged. No comments are needed to choose a fighter.
 
-## Synchronization
+## Exact damage and healing rules
 
-`server.py` uses only Python's standard library and listens on `127.0.0.1`. The dashboard publishes match state; overlays poll approximately every 120 ms. State is held in memory until the server stops, and dashboard settings also persist in browser storage. Keep **one dashboard** open as the controller. The dashboard owns round expiry; close it only after stopping the match.
+- **Damage = catalog coin value × completed gift count.** A 1-coin gift deals 1 damage; three 10-coin gifts deal 30 damage to the opposing fighter.
+- **Healing = catalog coin value × completed gift count.** The selected healing gift restores its assigned fighter's health instead of dealing damage. Two 5-coin healing gifts restore 10 health.
+- Health stays between **0 and 100**. Extra damage beyond zero and healing beyond maximum health are naturally unused. There is no fixed 12-damage gift rule or separate 100-coin combo cap.
+- Values come from the copied catalog, never an arbitrary damage/price supplied in an incoming message. Catalog prices are the battle repository's snapshot; update that catalog when gift prices change. Unknown gift IDs are never assigned an invented price.
+- Streak gifts wait for `repeatEnd`. Intermediate updates do not score. Completed combos and duplicate messages are deduplicated using group/message identity. Completed combo counts must be whole numbers between 1 and 100,000.
+- Every accepted gift updates health immediately. Animation recovery never drops or postpones gift damage/healing. Several fast gifts may share the latest visible reaction, but all accepted coin values are applied.
+- **Comments, likes, follows, votes, punch commands and special commands never change health, scores, assignments or the winner.** Manual punch/vote/special controls were removed. Manual testing simulates an assigned gift only.
+- At zero health, the opponent wins and the loser animates into a knockout. Finished rounds cannot be healed or damaged. Start or Reset clears health and received-coin totals; gift assignments remain saved.
+- At the round deadline, remaining health decides the winner. Equal health is a draw; votes and received-coin totals never break ties. Received-coin totals are informational and include healing gifts.
 
-Static hosting (`python -m http.server 8766`) still supports the original BroadcastChannel/localStorage synchronization within the same origin and browser profile. Separate Live Studio browser profiles require `server.py`. Use the exact same hostname and port for dashboard and overlay. The relay rejects cross-site, stale and invalid writes and has no external dependencies.
+The overlay shows the assigned gift icons: **⚔** marks gifts that damage the opponent and **♥** marks the fighter's healing gift. It shows up to three damage icons per fighter and a count for additional assignments. Green healing effects are distinct from punch reactions.
 
-## Connect TikFinity Desktop
+## TikFinity Desktop
 
-The game now accepts TikFinity's native `{event, data}` messages directly. No intermediate adapter app is needed. [Official TikFinity Event API documentation](https://tikfinity.zerody.one/tiktok/dapi) specifies `ws://localhost:21213/` and requires TikFinity Desktop on the same computer. Payload fields follow the linked [TikTok-Live-Connector documentation](https://github.com/zerodytrash/TikTok-Live-Connector).
+The game accepts native `{event, data}` gift messages. The [official TikFinity Event API](https://tikfinity.zerody.one/tiktok/dapi) documents `ws://localhost:21213/` and requires TikFinity Desktop on the same computer.
 
-1. Open **TikFinity Desktop** on your streaming PC, finish its setup, and connect it to your TikTok LIVE. Use the desktop app, not just the TikFinity website.
-2. Run **Start-Boxing.cmd** and open **Connections** on the dashboard.
-3. Keep **TikFinity Desktop** selected and use `ws://localhost:21213/` (or the endpoint shown by your installed version). Click **Connect TikFinity**.
-4. Confirm **TikFinity socket connected**, then start a round. From another viewer account, comment `1` for blue or `2` for red. The vote counter must increase. Every three votes queue a 4-damage punch.
-5. Send likes from that viewer. Every **10 received likes** count as one additional vote for the chosen team. Partial batches accumulate. The game uses `likeCount`, not the stream's total likes; it can only count events TikFinity actually delivers.
-6. After choosing a team, send a gift. Non-streak gifts apply immediately through the attack queue. Streak gifts wait for `repeatEnd` and apply **12 × repeatCount damage**, capped at **100 per combo**. Intermediate updates and duplicate completed combos do not cause extra damage. Gift prices do not affect damage.
-7. Confirm the health, votes and timer agree in the dashboard preview and Live Studio overlay.
+1. Open **TikFinity Desktop**, finish its setup and connect it to your TikTok LIVE.
+2. Run the arena and open **Connections**. Keep **TikFinity Desktop** selected and use `ws://localhost:21213/`, or the endpoint shown by your installed version.
+3. Click **Connect TikFinity**, then confirm the socket-connected status.
+4. Save gift assignments and start a round. Test a completed, assigned gift from a viewer account and verify the correct fighter's health change. No team-selection comment is needed.
+5. Test the selected healing gift while that fighter has missing health. Compare dashboard, preview and external overlay health.
 
-Team choices last for the current dashboard session; reloading the dashboard requires viewers to choose again. A viewer may switch teams by commenting the other number. Likes and gifts from viewers who have not chosen a team are ignored. Team selections can be made before the round, but votes and damage only apply while it runs. Every gift uses the selected team; there is no gift-name/coin-price mapping.
+A connected socket confirms transport only; received events do not by themselves verify gift scoring. Adapter, Chromium WebSocket simulator and isolated-overlay tests have passed. **No real TikFinity desktop instance, live account or real gift transaction was tested here.** The existing desktop connection has no automatic reconnect; press Connect again after restoring TikFinity.
 
-Live attacks wait through the 660 ms recovery period in a queue of at most 100 pending attacks. Excess attacks are dropped with an activity-log message. Start, Reset, a finished round, and manual disconnect clear pending actions. The native adapter retains up to 5,000 event IDs and 10,000 viewer selections in memory. Deduplication uses message IDs or completed gift-group IDs when supplied; it cannot guarantee replay protection for events without IDs or across reloads. Incoming messages are limited to 256 KiB, with like/gift batch counts capped at 1,000 before applying game rules.
-
-A connected socket confirms transport only. The event count shows valid provider messages received, including non-game events; game counters confirm that chat/likes/gifts were mapped. **No real TikFinity desktop instance, account, or live gift has been tested here.** The automated tests use a local simulator shaped according to the documented API. To finish verification, perform steps 4–7 on your PC. Do not purchase gifts just to debug basic connectivity: test comments first. If connection fails, verify the desktop app is running on the same PC, its local Event API endpoint is available, and that the address matches your version. There is no automatic reconnect; press Connect again after restoring TikFinity.
+The adapter accepts flat/nested sender fields and keeps the last 20,000 gift identities in memory. Gifts without a stable message or usable completed-combo identity are rejected. Replay protection does not survive dashboard reloads or guarantee protection after old IDs are evicted. Gift messages are limited to 256 KiB. Non-gift events are ignored completely.
 
 ### Advanced normalized test bridge
 
-The previous generic protocol remains available under **Normalized test bridge (advanced)** for development fixtures:
+The developer bridge remains available under **Normalized test bridge (advanced)**. Only gift messages are processed, using the same catalog and saved assignments:
 
 ```json
-{"id":"unique-event-123","type":"vote","side":"blue"}
+{"id":"unique-event-123","type":"gift","giftId":"5655","count":3}
 ```
 
-Supported types: `vote`, `comment`, `like`, `gift`, `punch`, `special`. Sides: `blue`, `red`. In this test mode each vote/comment/like is one vote, gifts cause 12 damage, and specials cause 20. Optional string IDs (up to 128 characters) deduplicate the last 1,000 IDs. Generic test attacks retain the original recovery behavior (attacks during recovery are ignored). Select **TikFinity Desktop** for actual TikFinity messages.
+`giftId` chooses the saved assignment; `count` defaults to 1. Optional `id` values deduplicate the last 1,000 normalized messages. Incoming `side`, `power`, `diamondCount` and other price fields do not override catalog rules. Other message types are ignored. Use the native TikFinity mode for the actual desktop app.
+
+## Live Studio and synchronization
+
+Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Otherwise open the overlay in a separate browser window and capture that window. Keep the dashboard private.
+
+`server.py` uses Python's standard library and binds only to `127.0.0.1`. The dashboard publishes state; overlays poll about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it owns the round timer. Loopback sources cannot be reached from another computer.
+
+Static hosting (`python -m http.server 8766`) retains same-profile BroadcastChannel/localStorage synchronization. Separate browser sources require `server.py`. Isolated Chromium profile synchronization was tested; Windows launcher execution, actual Live Studio capture and streaming performance still need testing on your PC.
+
+## Custom fighters and languages
+
+Custom fighter names, remote HTTP(S) portraits, presets, round duration and bilingual controls remain available. Built-in Bibi/Netanyahu and Eisenkot caricatures are procedural Canvas fighters. Failed portraits fall back to a built-in face. Hebrew supports RTL layout while technical addresses stay LTR. Tabs support arrow keys, Home and End. The one-click Windows launcher is preserved.
 
 ## Verification
 
-The included dependency-free tests require Node 22+ and Chromium with its debugging port enabled. In separate terminals on a development machine:
+Tests require Node 22+ and Chromium. Run these in separate development terminals:
 
 ```sh
 python -m http.server 8766 --bind 127.0.0.1
@@ -74,6 +89,4 @@ node tests/browser.mjs
 node tests/relay.mjs
 ```
 
-`browser.mjs` closes existing test tabs at port 8766. It checks controls, recovery, saved-match reloads, voting, language sync, clipboard label preservation, expiry, mobile layout, synthetic WebSocket validation/deduplication, native TikFinity chat/like/gift combos, queued damage, and knockouts. `tikfinity.mjs` tests the native adapter separately with flat/nested viewer payloads, batched likes and streak deduplication. It writes screenshots under `/tmp`. `relay.mjs` checks separate storage contexts and cross-site/stale/invalid write rejection. Tests do not exercise Windows batch execution or the Live Studio application.
-
-Manual release check: switch Hebrew → English; save custom fighter names and a valid portrait; open an external overlay; start a round; compare health, votes and timer across dashboard, preview and overlay; test special attacks and a knockout; restart the server using the Windows launcher; finally test the captured 9:16 source in Live Studio.
+The tests verify catalog assets, exclusive damage/healing assignments, exact coin/combo math, non-gift rejection, duplicate prevention, rapid gifts, maximum healing, knockout rules, saved customization, RTL, mobile layout and separate-profile synchronization. Screenshots are written to `/tmp`. Browser tests close existing test tabs at port 8766; relay tests close test tabs at port 8767. Windows and actual Live Studio execution are not covered.

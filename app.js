@@ -1,26 +1,31 @@
 import {createTikFinityAdapter} from "./tikfinity.mjs";
+import {createGiftRules,giftDefaults} from "./gift-rules.mjs";
+const catalogResponse=await fetch("./catalog.json");
+if(!catalogResponse.ok)throw Error("Gift library could not load. Restart Start-Boxing.cmd and refresh.");
+const giftCatalog=await catalogResponse.json(),giftRules=createGiftRules(giftCatalog);
+let refreshGiftControls=()=>{};
 let refreshBridge=()=>{},refreshStats=()=>{},publishState=()=>{};
 const translationsHe=["מרכז השליטה בשידור","אולפן מקומי","נהלו את הקרב, התאימו את המתמודדים ובדקו אינטראקציות בשידור.","פתיחת מסך השידור 9:16","העתקת קישור לשידור","מצב הקרב","זמן שנותר","חיים — כחול","חיים — אדום","01 / מתמודדים","הגדרת מתמודדים","ניתן להתאמה","בחירת עימות מוכן","ביבי נגד איזנקוט","מסי נגד רונאלדו","עימות מותאם אישית","המתמודד הכחול","המתמודד האדום","קישור לתמונת המתמודד הכחול","קישור לתמונת המתמודד האדום","לביבי ולאיזנקוט יש דמויות מאוירות מובנות. אפשר להחליף אותן באמצעות קישור לתמונה.","02 / חוקי הקרב","הגדרות הקרב","שפת התצוגה","משך הסיבוב (בשניות)","שמירת הגדרות","התחלת סיבוב","איפוס","03 / אירועי שידור","שליטה בקרב","מצב בדיקה","אגרוף של הכחול","אגרוף של האדום","מתקפה מיוחדת — כחול","מתקפה מיוחדת — אדום","תגובה 1","תגובה 2","מתנה לכחול","מתנה לאדום","הצבעות לכחול: 0","הצבעות לאדום: 0","04 / חיבור לשידור","חיבור TikFinity","התחברות","מצב הדגמה · אין חיבור לשידור חי","יש לפתוח את TikFinity Desktop באותו מחשב ולחבר לשידור. חיבור השקע לבדו אינו מאמת קבלת אירועים חיים.","אירועים אחרונים","תצוגת שידור","תצוגה מקדימה","התצוגה מתעדכנת בזמן אמת. השאירו את לוח הבקרה פתוח בזמן השידור.","זירת האגרוף בשידור חי · גרסת הדגמה מקומית · החיבור לטיקטוק אינו פעיל כברירת מחדל"];
 const originalLabels={};
 
 const KEY="boxing-arena-v1";
-const defaults={language:"en",blueName:"BIBI",redName:"EISENKOT",blueImage:"",redImage:"",duration:60,remaining:60,blueHp:100,redHp:100,blueVotes:0,redVotes:0,phase:"ready",winner:null,startedAt:0,endsAt:0,action:null,revision:0};
+const defaults={language:"en",blueName:"BIBI",redName:"EISENKOT",blueImage:"",redImage:"",duration:60,remaining:60,blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,...giftDefaults(),phase:"ready",winner:null,startedAt:0,endsAt:0,action:null,revision:0};
 function read(){try{
  const saved=JSON.parse(localStorage.getItem(KEY)||"{}");
  if(!saved||typeof saved!=="object"||Array.isArray(saved))return {...defaults};
  const next={...defaults,...saved};
- for(const field of ["duration","remaining","blueHp","redHp","blueVotes","redVotes","startedAt","endsAt","revision"])if(!Number.isFinite(next[field])||next[field]<0)next[field]=defaults[field];
+ for(const field of ["duration","remaining","blueHp","redHp","blueVotes","redVotes","startedAt","endsAt","revision","blueCoins","redCoins"])if(!Number.isFinite(next[field])||next[field]<0)next[field]=defaults[field];
  next.duration=Math.min(300,Math.max(15,Math.round(next.duration)));
  next.blueHp=Math.min(100,next.blueHp);next.redHp=Math.min(100,next.redHp);
  next.language=next.language==="he"?"he":"en";
  for(const field of ["blueName","redName","blueImage","redImage"])if(typeof next[field]!=="string")next[field]=defaults[field];
  if(!["ready","running","finished"].includes(next.phase))next.phase="ready";
  if(next.action&&(!["blue","red"].includes(next.action.side)||!Number.isFinite(next.action.at)))next.action=null;
- return next;
+ try{Object.assign(next,giftRules.validate(next))}catch{Object.assign(next,giftDefaults())}
+ next.blueVotes=0;next.redVotes=0;return next;
  }catch{return {...defaults}}}
 let state=read();
-const liveActions=[];
-function enqueueLive(side,power,type){if(state.phase!=="running")return;if(liveActions.length>=100){log(state.language==="he"?"תור המתקפות מלא":"Live attack queue full");return}liveActions.push({side,power,type,round:state.startedAt})}
+let giftDraft=giftRules.validate(state);
 const channel=typeof BroadcastChannel!=="undefined"?new BroadcastChannel(KEY):null;
 function commit(patch){state={...state,...patch,revision:Math.max(Date.now(),Number(state.revision)+1)};try{localStorage.setItem(KEY,JSON.stringify(state))}catch{log(state.language==="he"?"לא ניתן לשמור בדפדפן":"Browser storage unavailable")}channel?.postMessage(state);publishState(state);renderControls()}
 function sync(next){if(next?.revision>=state.revision){state={...defaults,...next};localize();renderControls()}}
@@ -29,25 +34,36 @@ window.addEventListener("storage",e=>{if(e.key===KEY)sync(read())});
 const $=id=>document.getElementById(id);
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 function log(message){const el=$("log");if(!el)return;const row=document.createElement("div");row.dir="auto";row.textContent=new Date().toLocaleTimeString(state.language==="he"?"he-IL":"en-US")+" "+message;el.prepend(row);while(el.children.length>60)el.lastChild.remove()}
-function action(side,power=6,type="punch"){if(!["blue","red"].includes(side)||state.phase!=="running")return;if(Date.now()>=state.endsAt){finish();return}if(state.action&&Date.now()-state.action.at<660)return;const target=side==="blue"?"redHp":"blueHp";const hp=clamp(state[target]-power,0,100);const patch={[target]:hp,action:{side,type,at:Date.now(),id:crypto.randomUUID()},winner:hp===0?side:null};if(hp===0){patch.phase="finished";patch.remaining=Math.max(0,Math.ceil((state.endsAt-Date.now())/1000))}commit(patch);log((state.language==="he"?(side==="blue"?"כחול":"אדום")+" · "+({punch:"אגרוף",special:"מתקפה מיוחדת",gift:"מתנה"}[type]||type):side+" "+type)+" (-"+power+")")}
-function vote(side,count=1,live=false){if(!["blue","red"].includes(side)||state.phase!=="running")return;if(Date.now()>=state.endsAt){finish();return}const field=side+"Votes";const n=state[field]+count;const punches=Math.floor(n/3)-Math.floor(state[field]/3);commit({[field]:n});if(live){for(let i=0;i<punches;i++)enqueueLive(side,4,"punch")}else if(punches)action(side,4,"punch");log(state.language==="he"?"הצבעה ל"+(side==="blue"?"כחול":"אדום"):side+" vote")}
-function start(){liveActions.length=0;const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
-function reset(){liveActions.length=0;commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log(state.language==="he"?"הקרב אופס":"Reset")}
-function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?(state.blueVotes===state.redVotes?"draw":state.blueVotes>state.redVotes?"blue":"red"):state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[winner]):"Round finished: "+winner)}
-function renderControls(){if(!$("save"))return;localize();refreshStats();document.querySelectorAll("[data-hit],[data-special],[data-vote],[data-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=state.phase==="running";const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
+function action(side,power,type="gift",details={}){
+ if(!["blue","red"].includes(side)||!["gift","heal"].includes(type)||!Number.isSafeInteger(power)||power<1||state.phase!=="running")return;
+ if(Date.now()>=state.endsAt){finish();return}
+ const healing=type==="heal",target=(healing?side:side==="blue"?"red":"blue")+"Hp";
+ const hp=clamp(state[target]+(healing?power:-power),0,100),amount=Math.abs(hp-state[target]);
+ const patch={[target]:hp,[side+"Coins"]:state[side+"Coins"]+power,action:{side,type,power,amount,giftId:details.giftId||"",name:details.name||"",at:Date.now(),id:crypto.randomUUID()}};
+ if(!healing&&hp===0){patch.winner=side;patch.phase="finished";patch.remaining=Math.max(0,Math.ceil((state.endsAt-Date.now())/1000))}
+ commit(patch);
+ log((state.language==="he"?(side==="blue"?"כחול":"אדום"):side)+" · "+(details.name||"gift")+" · "+power+(state.language==="he"?" מטבעות":" coins")+" ("+(healing?"+":"−")+amount+" HP)");
+}
+function applyGift(giftId,count=1){
+ const event=giftRules.resolve(giftId,count,state);
+ if(!event){log(state.language==="he"?"מתנה ללא שיוך התעלמה: "+giftId:"Unassigned/unknown gift ignored: "+giftId);return}
+ action(event.side,event.power,event.type,event);
+}
+function start(){const duration=clamp(Number(state.duration)||60,15,300);commit({phase:"running",remaining:duration,blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,winner:null,action:null,startedAt:Date.now(),endsAt:Date.now()+duration*1000});log(state.language==="he"?"הסיבוב התחיל":"Round started")}
+function reset(){commit({phase:"ready",blueHp:100,redHp:100,blueVotes:0,redVotes:0,blueCoins:0,redCoins:0,remaining:Number(state.duration)||60,winner:null,action:null,endsAt:0});log(state.language==="he"?"הקרב אופס":"Reset")}
+function finish(){if(state.phase!=="running")return;const winner=state.blueHp===state.redHp?"draw":state.blueHp>state.redHp?"blue":"red";commit({phase:"finished",remaining:0,winner});log(state.language==="he"?"הסיבוב הסתיים: "+({blue:state.blueName,red:state.redName,draw:"תיקו"}[winner]):"Round finished: "+winner)}
+function renderControls(){if(!$("save"))return;localize();refreshStats();refreshGiftControls();document.querySelectorAll("[data-test-gift]").forEach(b=>b.disabled=state.phase!=="running");$("start").disabled=state.phase==="running";const status=$("status");if(status&&!status.dataset.connected)status.textContent=state.language==="he"?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection"}
 if($("save")){for(const field of ["language","blueName","redName","blueImage","redImage","duration"]){$(field).value=state[field];}
-$("save").onclick=()=>{const patch={};for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(state.phase!=="running")patch.remaining=patch.duration;$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
+$("save").onclick=()=>{const patch=giftRules.validate(giftDraft);for(const f of ["language","blueName","redName","blueImage","redImage"])patch[f]=$(f).value.trim();patch.duration=clamp(Math.round(Number($("duration").value)||60),15,300);patch.blueName=patch.blueName||"BIBI";patch.redName=patch.redName||"EISENKOT";if(state.phase!=="running")patch.remaining=patch.duration;$("duration").value=patch.duration;$("blueName").value=patch.blueName;$("redName").value=patch.redName;commit(patch);log(state.language==="he"?"ההגדרות נשמרו":"Settings saved")};
 $("start").onclick=start;$("reset").onclick=reset;
-document.querySelectorAll("[data-hit]").forEach(b=>b.onclick=()=>action(b.dataset.hit));
-document.querySelectorAll("[data-special]").forEach(b=>b.onclick=()=>action(b.dataset.special,20,"special"));
-document.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>vote(b.dataset.vote));
-document.querySelectorAll("[data-gift]").forEach(b=>b.onclick=()=>action(b.dataset.gift,12,"gift"));
+document.querySelectorAll("[data-test-gift]").forEach(b=>b.onclick=()=>{
+ const id=$(b.dataset.testGift+"TestGift").value;if(id)applyGift(id);
+});
 let ws=null,received=0;
 const adapter=createTikFinityAdapter(),seen=new Set();
 $("bridgeMode").value="tikfinity";
 $("wsUrl").value="ws://localhost:21213/";
 $("bridgeMode").onchange=()=>{if(ws){const previous=ws;ws=null;previous.close()}received=0;$("wsUrl").value=$("bridgeMode").value==="tikfinity"?"ws://localhost:21213/":"ws://127.0.0.1:8765/";bridgeStatus(false)};
-setInterval(()=>{if(state.phase!=="running"){liveActions.length=0;return}if(state.action&&Date.now()-state.action.at<660)return;const next=liveActions.shift();if(next&&next.round===state.startedAt)action(next.side,next.power,next.type)},80);
 refreshBridge=()=>bridgeStatus(ws?.readyState===WebSocket.OPEN);
 function bridgeStatus(connected){
  for(const id of ["status","connectionBadge"]){const el=$(id);el.dataset.connected=connected?"1":"";}
@@ -59,7 +75,7 @@ function bridgeStatus(connected){
  $("connect").querySelector("span").textContent=state.language==="he"?(connected?"ניתוק":native?"חיבור TikFinity":"התחברות"):(connected?"Disconnect":native?"Connect TikFinity":"Connect bridge");
 }
 $("connect").onclick=()=>{
- if(ws){const previous=ws;ws=null;previous.close();liveActions.length=0;bridgeStatus(false);return}
+ if(ws){const previous=ws;ws=null;previous.close();bridgeStatus(false);return}
  const url=$("wsUrl").value.trim();
  try{const parsed=new URL(url);if(!["ws:","wss:"].includes(parsed.protocol))throw Error();}catch{log(state.language==="he"?"יש להזין כתובת ws:// או wss://":"Enter a ws:// or wss:// URL");return}
  try{
@@ -72,13 +88,14 @@ $("connect").onclick=()=>{
  const event=JSON.parse(e.data);
  if($("bridgeMode").value==="tikfinity"){
   const actions=adapter.receive(event);received++;bridgeStatus(true);
-  for(const item of actions){if(item.type==="vote")vote(item.side,item.count,true);else enqueueLive(item.side,Math.min(100,12*item.count),"gift")}
+  for(const item of actions)applyGift(item.giftId,item.count)
   return;
  }
- if(!event||!["vote","comment","like","gift","punch","special"].includes(event.type)||!["blue","red"].includes(event.side))throw Error();
+ if(!event||typeof event!=="object")throw Error();
+ if(event.type!=="gift")return;
+ if(!/^\d{1,20}$/.test(String(event.giftId)))throw Error();
  if(event.id!==undefined){if(typeof event.id!=="string"||event.id.length>128)throw Error();if(seen.has(event.id))return;seen.add(event.id);if(seen.size>1000)seen.delete(seen.values().next().value)}
- if(event.type==="vote"||event.type==="comment"||event.type==="like")vote(event.side);
- else action(event.side,event.type==="special"?20:event.type==="gift"?12:6,event.type);
+ applyGift(event.giftId,event.count??1);
  }catch{log(state.language==="he"?"אירוע לא תקין נדחה":"Invalid event rejected")}};
  }catch{ws=null;bridgeStatus(false);log("Connection failed")}
 };
@@ -92,7 +109,7 @@ if($("preset")){
 $("language").addEventListener("change",()=>{commit({language:$("language").value})});
 $("preset").onchange=()=>{const p=$("preset").value;if(p==="bibi"){$("blueName").value="BIBI";$("redName").value="EISENKOT"}else if(p==="football"){$("blueName").value="MESSI";$("redName").value="RONALDO"}if(p!=="custom"){$("blueImage").value="";$("redImage").value=""}log(state.language==="he"?"הקרב נבחר — לחצו על שמירת הגדרות כדי להחיל":"Preset selected — click Save settings to apply")};
 $("copyOverlay").onclick=async()=>{const url=new URL("./overlay.html",location.href).href;try{await navigator.clipboard.writeText(url);$("copyOverlay").querySelector("span").textContent=state.language==="he"?"✓ הועתק":"✓ Copied";setTimeout(()=>localize(),1800)}catch{window.prompt("Copy overlay URL:",url)}};
-function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+(state.language==="he"?" שנ׳":"s");$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueVotesStat").textContent=(state.language==="he"?"הצבעות לכחול: ":"Blue votes: ")+state.blueVotes;$("redVotesStat").textContent=(state.language==="he"?"הצבעות לאדום: ":"Red votes: ")+state.redVotes}
+function stats(){const remaining=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;$("matchStatus").textContent=state.language==="he"?({ready:"מוכן",running:"מתנהל",finished:"הסתיים"}[state.phase]||state.phase):state.phase.toUpperCase();$("timeStat").textContent=remaining+(state.language==="he"?" שנ׳":"s");$("blueStat").textContent=Math.round(state.blueHp)+"%";$("redStat").textContent=Math.round(state.redHp)+"%";$("blueCoinsStat").textContent=(state.language==="he"?"מטבעות לכחול: ":"Blue gift coins: ")+state.blueCoins;$("redCoinsStat").textContent=(state.language==="he"?"מטבעות לאדום: ":"Red gift coins: ")+state.redCoins}
 refreshStats=stats;setInterval(stats,150);stats();
 }
 
@@ -121,10 +138,43 @@ updateTabLabels();
 localize();
 }
 
+// Gift assignments are drafted locally until Save settings is pressed.
+if($("giftLibrary")){
+ let librarySignature="",testSignature="";
+ const slotLabel=(side,type)=>state.language==="he"?(side==="blue"?"כחול":"אדום")+" · "+(type==="heal"?"ריפוי":"נזק"):(side==="blue"?"Blue":"Red")+" · "+(type==="heal"?"Heal":"Damage");
+ function route(id){for(const side of ["blue","red"]){if(giftDraft[side+"HealGift"]===id)return [side,"heal"];if(giftDraft[side+"AttackGifts"].includes(id))return [side,"gift"]}return null}
+ function choose(id){
+  const [side,type]=$("giftSlot").value.split(":"),old=route(id),remove=old?.[0]===side&&old?.[1]===type;
+  for(const corner of ["blue","red"]){giftDraft[corner+"AttackGifts"]=giftDraft[corner+"AttackGifts"].filter(x=>x!==id);if(giftDraft[corner+"HealGift"]===id)giftDraft[corner+"HealGift"]=""}
+  if(!remove){if(type==="heal")giftDraft[side+"HealGift"]=id;else giftDraft[side+"AttackGifts"].push(id)}
+  refreshGiftControls();
+ }
+ refreshGiftControls=(resetDraft=false)=>{
+  if(resetDraft)giftDraft=giftRules.validate(state);
+  const he=state.language==="he",query=$("giftSearch").value.trim().toLowerCase(),slot=$("giftSlot").value;
+  const signature=JSON.stringify([giftDraft,query,slot,he]);
+  if(signature!==librarySignature){librarySignature=signature;const list=$("giftLibrary");list.replaceChildren();
+   const matches=giftCatalog.filter(g=>g.name.toLowerCase().includes(query)||g.id.includes(query)||String(g.coins)===query);
+   for(const gift of matches){const assigned=route(gift.id),button=document.createElement("button");button.type="button";button.className="gift-card"+(assigned?" assigned-"+assigned[0]+(assigned[1]==="heal"?" healing":""):"");button.dataset.giftId=gift.id;button.setAttribute("aria-pressed",String(assigned?.join(":")===slot));button.onclick=()=>choose(gift.id);
+    const image=document.createElement("img");image.src=gift.image;image.alt="";image.loading="lazy";button.append(image);
+    for(const [className,value]of [["gift-name",gift.name],["gift-value",gift.coins+(he?" מטבעות":" coins")+" · #"+gift.id],["gift-route",assigned?slotLabel(...assigned):(he?"ללא שיוך":"Unassigned")]]){const span=document.createElement(className==="gift-value"?"small":"span");span.className=className;span.textContent=value;button.append(span)}
+    button.setAttribute("aria-label",gift.name+", "+gift.coins+(he?" מטבעות. ":" coins. ")+(assigned?slotLabel(...assigned):(he?"ללא שיוך":"Unassigned")));list.append(button);
+   }
+   $("giftCount").textContent=he?matches.length+" מתוך "+giftCatalog.length+" מתנות · מספריית TikTok LIVE Battle":matches.length+" of "+giftCatalog.length+" gifts · TikTok LIVE Battle library";
+   const summary=$("giftAssignments");summary.replaceChildren();
+   for(const side of ["blue","red"]){const row=document.createElement("div"),names=giftDraft[side+"AttackGifts"].map(id=>giftRules.gifts.get(id).name).join(", ")||(he?"ללא":"None"),heal=giftRules.gifts.get(giftDraft[side+"HealGift"]);row.textContent=slotLabel(side,"gift")+": "+names+" | "+(he?"ריפוי: ":"Heal: ")+(heal?heal.name+" ("+heal.coins+")":he?"ללא":"None");summary.append(row)}
+  }
+  const tests=JSON.stringify([state.blueAttackGifts,state.redAttackGifts,state.blueHealGift,state.redHealGift,he]);
+  if(tests!==testSignature){testSignature=tests;for(const side of ["blue","red"]){const select=$(side+"TestGift"),previous=select.value;select.replaceChildren();for(const id of [...state[side+"AttackGifts"],state[side+"HealGift"]].filter(Boolean)){const gift=giftRules.gifts.get(id),option=document.createElement("option");option.value=id;option.textContent=gift.name+" · "+gift.coins+(he?" מטבעות · ":" coins · ")+(id===state[side+"HealGift"]?(he?"ריפוי":"Heal"):(he?"נזק":"Damage"));select.append(option)}if([...select.options].some(o=>o.value===previous))select.value=previous}}
+ };
+ $("giftSearch").oninput=()=>refreshGiftControls();$("giftSlot").onchange=()=>refreshGiftControls();
+}
+
 const canvas=$("arena");
 if(canvas){
 const ctx=canvas.getContext("2d");
-const portraits={blue:new Image(),red:new Image()},urls={blue:"",red:""};
+const portraits={blue:new Image(),red:new Image()},urls={blue:"",red:""},giftIcons=new Map();
+function giftIcon(id,x,y,size=24){const gift=giftRules.gifts.get(id);if(!gift)return;let image=giftIcons.get(id);if(!image){image=new Image();image.src=gift.image;giftIcons.set(id,image)}if(image.complete&&image.naturalWidth)ctx.drawImage(image,x,y,size,size)}
 const particles=[],lastAction={at:0},W=540,H=960;
 const mix=(a,b,t)=>a+(b-a)*t;
 const ease=t=>1-Math.pow(1-clamp(t,0,1),3);
@@ -140,8 +190,8 @@ function burst(x,y,side,special){for(let i=0;i<(special?40:18);i++){const a=rnd(
 function limb(a,b,c,color,edge,w){line([a,b,c],edge,w+7);line([a,b,c],color,w)}
 function fighter(x,y,side,t){
 const blue=side==="blue",dir=blue?1:-1,main=blue?"#2377f7":"#f23e60",light=blue?"#79d7ff":"#ff9a74",dark=blue?"#163c95":"#91243e";
-const a=state.action,age=a?Date.now()-a.at:9999,att=a?.side===side&&age<660,hit=!!a&&a.side!==side&&age>=180&&age<650;
-const special=att&&a.type==="special",p=att?clamp(age/660,0,1):0,wind=att?Math.sin(Math.PI*Math.min(1,p*1.45)):0;
+const a=state.action,age=a?Date.now()-a.at:9999,att=a?.type!=="heal"&&a?.side===side&&age<660,hit=!!a&&a.type!=="heal"&&a.side!==side&&age>=180&&age<650;
+const special=att&&a.power>=20,p=att?clamp(age/660,0,1):0,wind=att?Math.sin(Math.PI*Math.min(1,p*1.45)):0;
 const punch=att?(p<.27?-.18*Math.sin(Math.PI*p/.27):p<.43?ease((p-.27)/.16):1-ease((p-.43)/.57)):0;
 const recoil=hit?Math.sin(Math.PI*clamp((age-180)/470,0,1)):0;
 const victory=state.phase==="finished"&&state.winner===side;
@@ -242,11 +292,16 @@ txt(Math.round(hp)+(state.language==="he"?" חיים":" HP"),x+118,263,15)}
 const rem=state.phase==="running"?Math.max(0,Math.ceil((state.endsAt-Date.now())/1000)):state.remaining;
 box(204,292,132,62,"#070d1e",17);txt(String(rem).padStart(2,"0"),270,336,38,"#ffe4a1");
 fighter(165,590,"blue",t);fighter(377,590,"red",t);
-if(state.action&&Date.now()-state.action.at<660){const a=state.action,age=Date.now()-a.at,impact=clamp((age-140)/150,0,1);
-if(age>140&&age<440){const x=a.side==="blue"?310:230,y=a.type==="special"?485:524;glow(x,y,110*(1-impact*.5),a.side==="blue"?"#38aaff99":"#ff5b6799");txt(a.type==="special"?"✦ BOOM! ✦":"✦",x,y,age<290?40:25,"#fff0b3")}}
-box(20,840,500,91,"#071329",16);
-txt("🔵 "+state.blueVotes+(state.language==="he"?"   הצבעות   ":"   VOTES   ")+state.redVotes+" 🔴",270,875,22);
-txt(state.language==="he"?"כתבו 1 או 2 כדי להצביע":"COMMENT 1 OR 2 TO VOTE",270,907,18,"#b5d5ff");
+if(state.action&&Date.now()-state.action.at<660){const a=state.action,age=Date.now()-a.at;
+ if(a.type==="heal"){const x=a.side==="blue"?165:377;glow(x,550,120,"#46e7a166");txt("+"+a.amount,x,485-age/15,32,"#83ffc4")}
+ else if(age>140&&age<440){const x=a.side==="blue"?310:230;glow(x,524,90,a.side==="blue"?"#38aaff99":"#ff5b6799");txt("−"+a.amount,x,510,32,"#fff0b3")}}
+box(20,824,500,120,"#071329",16);
+txt(state.language==="he"?"מתנות בלבד · מטבע אחד = נזק או ריפוי אחד":"GIFTS ONLY · 1 COIN = 1 DAMAGE / HEAL",270,848,15);
+for(const side of ["blue","red"]){const x=side==="blue"?28:288;txt(state[side+"Name"].slice(0,15),x+110,873,17,side==="blue"?"#a5d8ff":"#ffb0bb");
+ txt("⚔",x+12,903,19);const assigned=state[side+"AttackGifts"];assigned.slice(0,3).forEach((id,i)=>giftIcon(id,x+29+i*29,882,26));if(assigned.length>3)txt("+"+(assigned.length-3),x+127,900,13);
+ const healing=state[side+"HealGift"];if(healing){txt("♥",x+165,902,18,"#83ffc4");giftIcon(healing,x+180,882,26)}
+}
+txt(state.language==="he"?"חרבות: נזק ליריב · לב: ריפוי המתמודד":"⚔ DAMAGE OPPONENT     ♥ HEAL FIGHTER",270,931,13,"#83ffc4");
 if(state.phase!=="running"){box(45,396,450,83,"#071329e8",18);
 const result=state.phase==="finished"?(state.winner==="draw"?(state.language==="he"?"תיקו!":"DRAW!"):(state.winner==="blue"?state.blueName:state.redName)+(state.language==="he"?" ניצח!":" WINS!")):(state.language==="he"?"מוכנים לקרב?":"READY TO FIGHT?");
 txt(result.slice(0,23),270,449,30,"#ffe69b")}
@@ -254,9 +309,9 @@ txt(result.slice(0,23),270,449,30,"#ffe69b")}
 let lastFrame=0;
 function draw(t){const dt=Math.min(2.5,(t-lastFrame)/16.67||1);lastFrame=t;
 ctx.save();const a=state.action,age=a?Date.now()-a.at:9999;
-if(age>150&&age<350){const shake=a.type==="special"?8:3;ctx.translate(rnd(-shake,shake),rnd(-shake,shake))}
+if(a?.type!=="heal"&&age>150&&age<350){const shake=a.power>=20?8:3;ctx.translate(rnd(-shake,shake),rnd(-shake,shake))}
 arena(t);ctx.restore();
-if(a&&age>=180&&age<660&&a.at!==lastAction.at){lastAction.at=a.at;burst(a.side==="blue"?315:225,a.type==="special"?484:522,a.side,a.type==="special")}
+if(a&&a.type!=="heal"&&age>=180&&age<660&&a.at!==lastAction.at){lastAction.at=a.at;burst(a.side==="blue"?315:225,a.type==="special"?484:522,a.side,a.type==="special")}
 for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=.22*dt;p.life-=dt;ctx.globalAlpha=clamp(p.life/p.max,0,1);ellipse(p.x,p.y,p.r,p.r,p.color);ctx.globalAlpha=1;if(p.life<=0)particles.splice(i,1)}
 portrait("blue",state.blueImage);portrait("red",state.redImage);
 requestAnimationFrame(draw)}
@@ -280,7 +335,7 @@ if($("save"))setInterval(()=>{if(state.phase==="running"&&Date.now()>=state.ends
  const response=await fetch("./api/state",{method:"POST",headers:{"Content-Type":"application/json"},body:snapshot,signal:AbortSignal.timeout(2000)});
  if(!response.ok)throw Error("Relay refused state");
  }).catch(()=>log(state.language==="he"?"סנכרון מקומי נכשל — בדקו שהשרת פתוח":"Local relay sync failed — check the server"))};
- if(remote){state={...defaults,...remote};renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration"])$(field).value=state[field];}
+ if(remote){state={...defaults,...remote};renderControls();for(const field of ["language","blueName","redName","blueImage","redImage","duration"])$(field).value=state[field];refreshGiftControls(true);}
  else publishState(state);
  }else if(remote)sync(remote);
  }catch{return}
