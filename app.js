@@ -45,6 +45,18 @@ document.querySelectorAll("[data-i18n]").forEach(el=>{const key=el.dataset.i18n;
 const status=$("status");if(status&&!status.dataset.connected)status.textContent=hebrew?"מצב הדגמה · אין חיבור לשידור חי":"Demo mode · no live connection";
 }
 
+
+if(document.querySelector(".tabs")){
+const tabs=[...document.querySelectorAll("[data-tab]")];
+function activateTab(name){tabs.forEach(b=>{const active=b.dataset.tab===name;b.classList.toggle("active",active);b.setAttribute("aria-selected",String(active))});document.querySelectorAll("[data-pane]").forEach(p=>p.hidden=p.dataset.pane!==name)}
+tabs.forEach(b=>b.addEventListener("click",()=>activateTab(b.dataset.tab)));
+activateTab("live");
+const updateTabLabels=()=>{const he=state.language==="he";document.querySelectorAll("[data-tab-en]").forEach(el=>el.textContent=he?el.dataset.tabHe:el.dataset.tabEn);const badge=$("connectionBadge");if(badge&&!badge.dataset.connected)badge.textContent=he?"● הדגמה":"● DEMO"};
+const oldLocalize=localize;
+localize=function(){oldLocalize();updateTabLabels()};
+updateTabLabels();
+}
+
 const canvas=$("arena");
 if(canvas){
 const ctx=canvas.getContext("2d");
