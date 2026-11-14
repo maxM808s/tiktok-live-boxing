@@ -18,7 +18,8 @@ if %errorlevel%==0 (
 )
 echo Starting TikTok LIVE Boxing at http://127.0.0.1:%PORT%
 start "" "http://127.0.0.1:%PORT%/index.html"
-%PYTHON% -m http.server %PORT% --bind 127.0.0.1
+%PYTHON% server.py --port %PORT%
 echo.
 echo Server stopped. If the port was already in use, close the other server and try again.
 pause
+
