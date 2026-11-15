@@ -1,121 +1,103 @@
 # 🥊 TikTok LIVE Boxing Arena
 
-A local browser boxing game with a Hebrew/English dashboard, animated fighters and a 9:16 overlay. **Only gifts affect gameplay.** TikFinity protocol support is simulator-tested; a real TikFinity LIVE session still needs verification on your PC.
+A browser-based 2D boxing game for TikTok LIVE, with customizable fighters, a Hebrew/English control dashboard, and a vertical 9:16 overlay for LIVE Studio. Viewers support a fighter through assigned gifts that damage the opponent or heal their fighter.
 
-## Run on Windows
+TikFinity event handling has been tested with simulated events. Actual TikFinity LIVE gift delivery and Windows LIVE Studio capture still need verification on the streaming computer.
 
-1. In GitHub Desktop, choose **Fetch origin → Pull origin** on `main`.
-2. Close the previous arena server window, then double-click **Start-Boxing.cmd**. Python 3 is required; no additional packages are needed.
-3. Open http://127.0.0.1:8766/index.html if it does not open automatically. Keep one dashboard and the server window open while streaming.
-4. Open **Match setup**, customize fighters and select English/עברית, round duration and gift assignments. Press **Save settings**.
-5. Start a round in **Live control**. Its gift simulation buttons use the exact same assignments and coin values as TikFinity, without sending real gifts.
+## Getting started
 
-The Windows launcher retains its one-click workflow, Python detection and local port. It runs `server.py` for cross-browser synchronization. On other systems run `python server.py`.
+Requirements: Python 3, a modern browser, and TikFinity Desktop for live gift events. The game server uses Python's standard library; no additional Python packages are required.
 
-## Game modes and round scores
+1. Download the repository, or pull the latest `main` updates in GitHub Desktop.
+2. On Windows, double-click **Start-Boxing.cmd**. The dashboard opens automatically. If needed, open http://127.0.0.1:8766/index.html.
+3. In **Match setup**, choose fighters, language, round duration, and gift assignments. Press **Save settings**. Game mode selection applies immediately.
+4. In **Live control**, press **Start match**. Use the gift simulation controls to check damage and healing before connecting live events.
+5. Keep the server and one dashboard open while streaming. The dashboard receives TikFinity gifts; the server manages round timing and synchronizes the overlay.
 
-Choose **Match setup → Game mode**, set the round length (15–300 seconds), and press **Start match**. Mode selection applies immediately; save changes to the other settings.
+On other systems, run `python server.py` from the project folder and open the dashboard URL above. When updating, close the old server before starting the launcher again.
+
+## Game modes
+
+Rounds last 15–300 seconds and end at the deadline or a knockout. The fighter with more health at the deadline wins; equal health is a tie. Each win adds one point. Ties add no points.
 
 | Mode | Behavior |
 | --- | --- |
-| Single timed round | One round; the result stays visible until a new match is started. |
-| Endless timed rounds | A timed round ends on a knockout or the deadline. Each victory adds one point, then a fresh round starts automatically after a 3-second result display. This repeats until paused or reset. |
-| Best of 3 | First fighter to two round wins becomes champion. The next round starts automatically until that target is reached. |
-| Best of 5 | First fighter to three round wins becomes champion. |
+| Single timed round | The result remains visible until a new match starts. |
+| Endless timed rounds | After every win or tie, the result appears for three seconds, then a fresh round starts automatically. |
+| Best of 3 | First to two wins becomes champion. Tied rounds continue the series. |
+| Best of 5 | First to three wins becomes champion. Tied rounds continue the series. |
 
-At the deadline, the fighter with more health wins. Equal health is a draw: no points are added, and automatic modes continue after the result display. Draws do not count toward a best-of victory target. Round numbers include drawn rounds.
+Fresh rounds restore both fighters to 100 health and clear round coin totals while preserving assignments and match points. Round numbers include ties. Automatic transitions continue while the dashboard is in the background, provided the server remains running.
 
-The dashboard and 9:16 overlay show the current round and both fighters' cumulative win points. A settled round awards its point only once, including after reloads. Each new round restores both fighters to 100 health and clears that round's coin totals; gift assignments and cumulative points remain.
+**Pause** stops the round timer or progression between rounds. **Resume match** continues play. **Reset** clears the match and points while retaining settings. **New match** starts a finished match over. Reset before changing modes during an active match.
 
-**Pause** freezes an active round's remaining time without changing health or scores, or stops automatic progression between rounds. **Resume match** continues the paused round, or starts the next round if the previous round was already settled. **Reset** stops the match and clears round/point totals while keeping the selected mode, fighters and gift assignments. **New match** starts a finished match over at round 1 with zero points. Mode selection is locked during a running/paused match; reset before choosing a different mode.
+## Gifts and healing
 
-Gifts affect health **only while a round is running**. Gifts during a pause or the 3-second result display are ignored, not queued for the next round. Native replay identities are still consumed so those events cannot be replayed later. The local Python server owns deadlines and automatic transitions, including while the dashboard is backgrounded or frozen. Keep one dashboard open to receive TikFinity gifts. Wins show the winner and ties show a tie, then automatic modes start a fresh round after three seconds. Saving a different duration during play changes the next fresh round; it does not change the current round's deadline.
-
-## Gift library and assignments
-
-The bundled **154-gift catalog and all 154 local icons** come from your [TikTok LIVE Battle repository](https://github.com/maxM808s/tiktok-live-battle). `catalog.json` retains its gift IDs, names, coin values, image paths, source URLs and verification metadata. Gift assets are copied locally, so the picker does not depend on remote image hosts. Source catalog blob: `0abfbc85564fc79c4ad17a7dfe9f17d2ad6848e2`; source tree: `2f1e8a77388ed3a3231974c38fd962d5f7bec811`.
+The bundled catalog contains 154 gifts with local icons, sourced from [TikTok LIVE Battle](https://github.com/maxM808s/tiktok-live-battle). Prices use the bundled catalog snapshot and may need updating when TikTok gift prices change.
 
 In **Match setup → Gift library & healing**:
 
-1. Choose an assignment: **Blue · damage opponent**, **Red · damage opponent**, **Blue · healing gift**, or **Red · healing gift**.
-2. Search the catalog by name, gift ID or coin value. Click a gift to assign it. Click it again in the same assignment to remove it.
-3. Choose **one healing gift per fighter** from the two prominent healing selectors above the library, with an icon preview. You can also use the library assignment menu. Choose as many different damage gifts as desired. A new healing gift replaces that fighter's previous healing gift.
-4. Each gift has one assignment across the whole game. Assigning an already-used gift moves it to the new slot; it cannot damage and heal, or support both fighters, at the same time.
-5. Press **Save settings**. Unsaved selections remain a draft. Saved changes affect subsequent gifts immediately, including during a round.
+1. Assign punch gifts to the blue or red fighter using the gift library.
+2. Select one healing gift per fighter using the healing selectors. Leave the selection empty to disable healing.
+3. Press **Save settings** to apply the assignments.
 
-Defaults: **Rose** supports blue and damages red; **TikTok** supports red and damages blue. Healing is disabled until a healing gift is selected. Unassigned or unknown gifts are ignored and logged. No comments are needed to choose a fighter.
+Each gift can have only one assignment across the game. Assigning it elsewhere moves it from its previous slot. Multiple punch gifts can support each fighter. By default, Rose supports blue and TikTok supports red; neither fighter has a healing gift selected.
 
-## Exact damage and healing rules
+- **Damage:** gift coin value × completed gift count, applied to the opponent.
+- **Healing:** gift coin value × completed gift count, restored to the assigned fighter.
+- Health stays between 0 and 100. A 1-coin gift deals 1 damage or restores 1 health.
+- Streak gifts apply when the combo completes. Duplicate native gift events are filtered.
+- Unknown and unassigned gifts are ignored. Comments, likes, and follows do not affect gameplay.
+- Gifts received while paused, between rounds, or after a match finishes are ignored rather than carried into the next round.
 
-- **Damage = catalog coin value × completed gift count.** A 1-coin gift deals 1 damage; three 10-coin gifts deal 30 damage to the opposing fighter.
-- **Healing = catalog coin value × completed gift count.** The selected healing gift restores its assigned fighter's health instead of dealing damage. Two 5-coin healing gifts restore 10 health.
-- Health stays between **0 and 100**. Extra damage beyond zero and healing beyond maximum health are naturally unused. There is no fixed 12-damage gift rule or separate 100-coin combo cap.
-- Values come from the copied catalog, never an arbitrary damage/price supplied in an incoming message. Catalog prices are the battle repository's snapshot; update that catalog when gift prices change. Unknown gift IDs are never assigned an invented price.
-- Streak gifts wait for `repeatEnd`. Intermediate updates do not score. Completed combos and duplicate messages are deduplicated using group/message identity. Completed combo counts must be whole numbers between 1 and 100,000.
-- Every accepted gift updates health immediately. Animation recovery never drops or postpones gift damage/healing. Several fast gifts may share the latest visible reaction, but all accepted coin values are applied.
-- **Comments, likes, follows, votes, punch commands and special commands never change health, scores, assignments or the winner.** Manual punch/vote/special controls were removed. Manual testing simulates an assigned gift only.
-- At zero health, the opponent wins and the loser animates into a knockout. Finished rounds, intermissions and paused rounds cannot be healed or damaged. Fresh rounds restore health and clear received-coin totals; gift assignments remain saved.
-- At the round deadline, remaining health decides the winner. Equal health is a draw; votes and received-coin totals never break ties. Received-coin totals are informational and include healing gifts.
+The overlay labels gifts **Punch / אגרוף** and **Heal / ריפוי**. Use **Punch & healing information position** to place this information at the bottom or above the fighter names, then save settings.
 
-The overlay labels assigned gifts **Punch / אגרוף** and **Heal / ריפוי**, directly beside their icons. In Match setup, **Punch & healing information position** switches the gift information between the bottom of the screen and above the fighter names. Placement updates immediately, persists across reloads and synchronizes with isolated browser sources. The old coin-ratio banner and sword/heart legend are removed. Up to three punch gifts are shown, with a count for additional assignments. Green healing effects remain distinct from punch reactions.
+## Connect TikFinity
 
-## TikFinity Desktop
+1. Open TikFinity Desktop on the same computer and connect it to TikTok LIVE.
+2. Open the dashboard's **Connections** tab and select **TikFinity Desktop**.
+3. Use `ws://localhost:21213/`, or the address documented by the installed TikFinity version, and press **Connect TikFinity**.
+4. Start a round and verify an assigned gift changes the correct fighter's health. Test healing while that fighter has missing health and compare the dashboard with the overlay.
 
-The game accepts native `{event, data}` gift messages. The [official TikFinity Event API](https://tikfinity.zerody.one/tiktok/dapi) documents `ws://localhost:21213/` and requires TikFinity Desktop on the same computer.
+A connected socket confirms the connection, not successful live gift scoring. The connection does not automatically reconnect; connect again after restoring TikFinity. See the [TikFinity Event API documentation](https://tikfinity.zerody.one/tiktok/dapi) for its desktop event interface.
 
-1. Open **TikFinity Desktop**, finish its setup and connect it to your TikTok LIVE.
-2. Run the arena and open **Connections**. Keep **TikFinity Desktop** selected and use `ws://localhost:21213/`, or the endpoint shown by your installed version.
-3. Click **Connect TikFinity**, then confirm the socket-connected status.
-4. Save gift assignments and start a round. Test a completed, assigned gift from a viewer account and verify the correct fighter's health change. No team-selection comment is needed.
-5. Test the selected healing gift while that fighter has missing health. Compare dashboard, preview and external overlay health.
+Use one dashboard as the live controller. Keep its browser storage available and do not clear gift replay history during a stream. If replay protection blocks events, check the dashboard log and [security notes](SECURITY.md). The advanced normalized test bridge is intended for development; use native TikFinity mode with TikFinity Desktop.
 
-A connected socket confirms transport only; received events do not by themselves verify gift scoring. Adapter, Chromium WebSocket simulator and isolated-overlay tests have passed. **No real TikFinity desktop instance, live account or real gift transaction was tested here.** The existing desktop connection has no automatic reconnect; press Connect again after restoring TikFinity.
+## Capture in TikTok LIVE Studio
 
-The adapter accepts flat/nested sender fields and persists both message and completed-combo identities in local browser storage. Gifts without a stable message or usable completed-combo identity are rejected. Native replay protection survives dashboard reloads and never silently evicts old identities: full, corrupt or unavailable replay storage rejects new native events and logs the issue. It is bounded to 40,000 keys / 1.5 million JSON characters; use one controller and never clear history during an active stream. Gift messages are limited to 256 KiB. Non-gift events are ignored completely. See [SECURITY.md](SECURITY.md) for the trust boundary and recovery notes.
+Set up a **1080×1920** scene and choose either capture method:
 
-### Advanced normalized test bridge
+- **Separate window:** press **Open separate game window**. On Windows, an installed Edge or Chrome browser opens the overlay in a dedicated app window. Select **Boxing Arena — Game Capture** in LIVE Studio Window Capture. Press **F** or the auto-hiding fullscreen button to toggle fullscreen. If the app browser is unavailable, allow the fallback popup.
+- **Browser source:** if supported by the installed LIVE Studio version, use `http://127.0.0.1:8766/overlay.html` and fit the 9:16 overlay to the scene.
 
-The developer bridge remains available under **Normalized test bridge (advanced)**. Only gift messages are processed, using the same catalog and saved assignments:
+Keep the dashboard outside the captured scene. Dashboard and overlay must use the same server address and port. The server binds to this computer only; its URLs cannot be opened from another computer.
 
-```json
-{"id":"unique-event-123","type":"gift","giftId":"5655","count":3}
-```
+## Customization and languages
 
-`giftId` chooses the saved assignment; `count` defaults to 1. Optional `id` values deduplicate the last 1,000 normalized messages. Incoming `side`, `power`, `diamondCount` and other price fields do not override catalog rules. Other message types are ignored. Use the native TikFinity mode for the actual desktop app.
+Built-in Bibi and Eisenkot fighters have distinct arcade designs. Match setup supports custom names, fighter presets, and HTTP(S) portrait URLs. Failed portraits fall back to a built-in face. Select English or Hebrew for the dashboard and overlay; Hebrew uses right-to-left layout.
 
-## Live Studio and synchronization
+## Troubleshooting
 
-Use `http://127.0.0.1:8766/overlay.html` as a browser/webpage source if your Live Studio version supports it. Use a 1080×1920 scene and fit the 9:16 overlay. Press **Open separate game window** in the dashboard. On Windows, Edge or Chrome opens a dedicated app window with a separate capture profile and fullscreen launch flags. Select **Boxing Arena — Game Capture** in LIVE Studio Window Capture; the dashboard stays in its own browser window. If the app browser is unavailable, a separate popup opens (allow popups). Press **F** or the auto-hiding fullscreen button to toggle fullscreen. Keep the dashboard private.
+- **Launcher closes or Python is missing:** install Python 3 and enable **Add Python to PATH**, then run the launcher again.
+- **Port already in use:** close the previous arena server before restarting.
+- **Overlay is stale or rounds stop advancing:** ensure the current `server.py` is running, refresh the dashboard and overlay, and check that both use the same address and port.
+- **Gifts have no effect:** check TikFinity's connection, saved gift assignments, and that a round is running. Streak gifts must complete before applying. Healing has no visible effect at full health.
+- **Capture window does not open:** allow popups or use the browser-source URL. Confirm Edge or Chrome is installed for the dedicated Windows app window.
 
-`server.py` uses Python's standard library and binds only to `127.0.0.1`. It serves only allowlisted game files and rejects malformed state and cross-site writes; local applications remain trusted. The dashboard sends commands; the server validates them and advances the match clock independently. Dashboards and overlays poll canonical state about every 120 ms, including from separate browser profiles. State lives in server memory and dashboard settings also persist in browser storage. Use the same hostname and port, and keep **one dashboard** open: it receives TikFinity gifts. Loopback sources cannot be reached from another computer.
+## Development and security
 
-For isolated development only, static hosting (`python -m http.server 8766`) retains same-profile BroadcastChannel/localStorage synchronization. Separate browser sources require `server.py`; the static fallback does not provide the hardened server's file restrictions or security headers. Isolated Chromium profile synchronization was tested; Windows launcher execution, actual Live Studio capture and streaming performance still need testing on your PC.
+Core files: `index.html` (dashboard), `overlay.html` (capture overlay), `app.js` (rendering and controls), `style.css`, and `server.py` (local server). Use `server.py` for normal operation and cross-browser synchronization.
 
-## Custom fighters and languages
-
-Bibi now has a taller, narrower silhouette, angular face, hooded eyes, long nose, gold-trimmed kit and high laced boxing boots. Eisenkot has a broader build, rounded cheeks, wider jaw, heavier arms, silver-trimmed kit and lower, wider burgundy boots. Both keep the chest-level guard and articulated punch/knockout animation. Custom fighter names, remote HTTP(S) portraits, presets, round duration and bilingual controls remain available. Built-in Bibi/Netanyahu and Eisenkot caricatures are procedural Canvas fighters. Failed portraits fall back to a built-in face. Hebrew supports RTL layout while technical addresses stay LTR. Tabs support arrow keys, Home and End. The one-click Windows launcher is preserved.
-
-## Verification
-
-Tests require Node 22+ and Chromium. Run these in separate development terminals:
+Core checks require Python 3 and Node.js 22 or newer. Run them from the project folder:
 
 ```sh
-python -m http.server 8766 --bind 127.0.0.1
-python server.py --port 8767
-chromium --headless --remote-debugging-port=9222 --user-data-dir=/tmp/boxing-test-browser about:blank
+node tests/match.mjs
 node tests/tikfinity.mjs
-node tests/browser.mjs
-node tests/relay.mjs
+node tests/security.mjs
+python tests/server_clock.py
+python tests/security_server.py
 ```
 
-The tests verify catalog assets, exclusive damage/healing assignments, exact coin/combo math, non-gift rejection, duplicate prevention, rapid gifts, maximum healing, knockout rules, saved customization, RTL, mobile layout and separate-profile synchronization. Screenshots are written to `/tmp`. Browser tests close existing test tabs at port 8766; relay tests close test tabs at port 8767. Windows and actual Live Studio execution are not covered.
+Browser regression scripts are in `tests/` and require a dedicated Chromium debugging session and the server ports specified in each script. Automated tests do not establish actual TikFinity LIVE or Windows capture compatibility.
 
-## Security
-
-The security review and remaining limitations are documented in [SECURITY.md](SECURITY.md). After pulling these fixes, close the previous server window and restart **Start-Boxing.cmd** so the new server protections take effect. Native TikFinity connections must be local; remote developer bridges must use WSS. Portraits accept HTTP(S) addresses without embedded credentials. Run `node tests/security.mjs`, `python tests/security_server.py`, and the dedicated hardened-server Chromium checks described in that report.
-
-Appearance/layout regression: run `node tests/appearance.mjs` against the static development fixture and dedicated Chromium debug profile. It checks direct healing selection, exclusive assignment, Hebrew/English placement updates, persistence and external overlay synchronization, and writes screenshots for both positions under `/tmp`.
-
-Mode tests: `node tests/match.mjs` covers deterministic round/series transitions and exact pause time. For the full hardened-server mode test, start `python server.py --port 8769` and run `node tests/modes-browser.mjs` with the dedicated Chromium debug profile. It exercises KO/time wins, automatic restarts, draws, reload-safe points, pause/resume, series champions and overlay score synchronization, and writes screenshots under `/tmp`.
-
-Regression: `python tests/server_clock.py` verifies browser-independent timing and Windows app-launch arguments. With the server on port 8770 and Chromium debugging on 9222, `node tests/tie-capture.mjs` exercises repeated ties with a frozen dashboard, win points, separate capture-window identity, fullscreen control wiring, and restored synchronization. Windows launch arguments are mocked in automated tests; verify the actual Windows app window on your PC.
+See [SECURITY.md](SECURITY.md) for the security review, local trust boundary, and replay-protection limitations.
